@@ -1,24 +1,19 @@
+import { ACCESS_TOKEN_KEY } from '@/config/constants';
 import axios from 'axios';
 
-import ENV from '@/config/env';
-import { ACCESS_TOKEN_KEY } from '@/config/constants';
+export function createHttp(baseURL: string) {
+  const instance = axios.create({
+    baseURL,
+    timeout: 10000,
+  });
 
-const http = axios.create({
-  baseURL: ENV.API_URL,
-  timeout: 10000,
-});
-
-http.interceptors.request.use(
-  (config) => {
+  instance.interceptors.request.use((config) => {
     const token = localStorage.getItem(ACCESS_TOKEN_KEY);
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
     return config;
-  },
-  (error) => {
-    return Promise.reject(error);
-  },
-);
+  });
 
-export default http;
+  return instance;
+}

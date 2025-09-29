@@ -7,11 +7,13 @@ import DashboardLayout from '@/components/layout/dashboard-layout';
 // Pages
 import Login from '@/pages/auth/login';
 import NotFound from '@/pages/not-found';
-import Parking from '@/pages/dashboard/parking';
-import Config from '@/pages/dashboard/config';
-import Residents from '@/pages/dashboard/residents';
-import Reports from '@/pages/dashboard/reports';
-import Index from '@/pages/dashboard';
+import Parking from '@/pages/dashboard/Parking';
+import Index from '@/pages/dashboard/Index';
+import Residents from '@/pages/dashboard/Residents';
+import Config from '@/pages/dashboard/Config';
+import Reports from '@/pages/dashboard/Reports';
+import PrivateRoute from '@/components/PrivateRoute';
+import { PublicRoute } from '@/components/PublicRoute';
 
 const router = createBrowserRouter([
   {
@@ -22,13 +24,19 @@ const router = createBrowserRouter([
     path: '/login',
     element: (
       <AuthLayout>
-        <Login />
+        <PublicRoute>
+          <Login />
+        </PublicRoute>
       </AuthLayout>
     ),
   },
   {
     path: '/dashboard',
-    element: <DashboardLayout />,
+    element: (
+      <PrivateRoute>
+        <DashboardLayout />
+      </PrivateRoute>
+    ),
     children: [
       {
         index: true,

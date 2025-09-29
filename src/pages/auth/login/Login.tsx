@@ -1,17 +1,31 @@
+import { authApi } from '@/config/axios';
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
 
 export default function Login() {
-  const [email, setEmail] = useState('admin@gmail.com');
-  const [password, setPassword] = useState('123456');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const navigate = useNavigate();
 
-  const handleSubmit = (e: React.MouseEvent<HTMLButtonElement>) => {
+  const handleSubmit = async (e: React.MouseEvent<HTMLButtonElement>) => {
     e.preventDefault();
     console.log('Login attempt:', { email, password });
-    if (email === 'admin@gmail.com' && password === '123456') {
-      navigate('/dashboard');
-    } else {
+    try {
+      const res = await authApi.post(
+        '/auth/login',
+        { email, password },
+        {
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        },
+      );
+
+      const data = await res.data;
+      localStorage.setItem('token', data.access_token);
+      localStorage.setItem('user', JSON.stringify(data.user));
+      navigate('/dashboard', { replace: true });
+    } catch (error) {
       alert('Email hoặc mật khẩu không đúng');
     }
   };
