@@ -1,4 +1,4 @@
-import { ACCESS_TOKEN_KEY } from '@/config/constants';
+import { ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY } from '@/config/constants';
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 
 interface User {
@@ -15,6 +15,7 @@ interface AuthContextType {
   loading: boolean;
   setLoading: (value: boolean) => void;
   login: (user: User, accessToken: string, refreshToken: string) => void;
+  logout: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -34,14 +35,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = (user: User, accessToken: string, refreshToken: string) => {
     localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
-    localStorage.setItem('refreshToken', refreshToken);
+    localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
     localStorage.setItem('user', JSON.stringify(user));
 
     setUser(user);
     setToken(accessToken);
   };
 
-  return <AuthContext.Provider value={{ user, token, loading, setLoading, login }}>{children}</AuthContext.Provider>;
+  const logout = () => {
+    localStorage.removeItem(ACCESS_TOKEN_KEY);
+    localStorage.removeItem(REFRESH_TOKEN_KEY);
+    localStorage.removeItem('user');
+
+    setUser(null);
+    setToken(null);
+  };
+
+  return (
+    <AuthContext.Provider value={{ user, token, loading, setLoading, login, logout }}>{children}</AuthContext.Provider>
+  );
 }
 
 export function useAuth() {

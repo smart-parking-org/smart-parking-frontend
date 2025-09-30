@@ -13,8 +13,31 @@ import {
   DropdownMenuSeparator,
   DropdownMenuItem,
 } from '@/components/ui/dropdown-menu';
+import { authApi } from '@/config/axios';
+import { useNavigate } from 'react-router';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function Header() {
+  const navigate = useNavigate();
+  const { logout: logoutContext } = useAuth();
+  async function logout() {
+    try {
+      await authApi.post(
+        '/auth/logout',
+        {},
+        {
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        },
+      );
+    } catch (error) {
+      console.error(error);
+    } finally {
+      logoutContext();
+      navigate('/login', { replace: true });
+    }
+  }
   return (
     <header className="sticky top-0 z-10 bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b">
       <div className="flex h-14 items-center gap-2 px-4">
@@ -48,7 +71,13 @@ export default function Header() {
             <DropdownMenuContent align="end" className="w-48">
               <DropdownMenuLabel>Tài khoản</DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => {}}>Đăng xuất</DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => {
+                  logout();
+                }}
+              >
+                Đăng xuất
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>

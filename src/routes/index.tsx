@@ -14,6 +14,7 @@ import Config from '@/pages/dashboard/Config';
 import Reports from '@/pages/dashboard/Reports';
 import PrivateRoute from '@/components/PrivateRoute';
 import { PublicRoute } from '@/components/PublicRoute';
+import Unauthorized from '@/pages/unauthorized';
 
 const router = createBrowserRouter([
   {
@@ -62,7 +63,7 @@ const router = createBrowserRouter([
   },
   {
     path: '/unauthorized',
-    element: <div>403 forbidden</div>,
+    element: <Unauthorized />,
   },
   {
     path: '*',
