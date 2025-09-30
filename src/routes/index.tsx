@@ -33,7 +33,7 @@ const router = createBrowserRouter([
   {
     path: '/dashboard',
     element: (
-      <PrivateRoute>
+      <PrivateRoute roles={['admin']}>
         <DashboardLayout />
       </PrivateRoute>
     ),
@@ -59,6 +59,10 @@ const router = createBrowserRouter([
         element: <Reports />,
       },
     ],
+  },
+  {
+    path: '/unauthorized',
+    element: <div>403 forbidden</div>,
   },
   {
     path: '*',

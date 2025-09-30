@@ -1,4 +1,5 @@
 import { authApi } from '@/config/axios';
+import { useAuth } from '@/contexts/AuthContext';
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
 
@@ -6,10 +7,11 @@ export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const navigate = useNavigate();
-
+  const { setLoading, login } = useAuth();
   const handleSubmit = async (e: React.MouseEvent<HTMLButtonElement>) => {
     e.preventDefault();
     console.log('Login attempt:', { email, password });
+    setLoading(true);
     try {
       const res = await authApi.post(
         '/auth/login',
@@ -22,11 +24,13 @@ export default function Login() {
       );
 
       const data = await res.data;
-      localStorage.setItem('token', data.access_token);
-      localStorage.setItem('user', JSON.stringify(data.user));
+      login(data.user, data.access_token, data.refresh_token);
       navigate('/dashboard', { replace: true });
     } catch (error) {
+      console.log(error);
       alert('Email hoặc mật khẩu không đúng');
+    } finally {
+      setLoading(false);
     }
   };
 
