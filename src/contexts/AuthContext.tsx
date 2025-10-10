@@ -1,3 +1,4 @@
+import { authApi } from '@/config/axios';
 import { ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY } from '@/config/constants';
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 
@@ -33,6 +34,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (savedToken) setToken(savedToken);
   }, []);
 
+  useEffect(() => {
+    const savedToken = localStorage.getItem(ACCESS_TOKEN_KEY);
+    if (savedToken) {
+      setToken(savedToken);
+      fetchUserProfile(savedToken);
+    }
+  }, []);
+
+  const fetchUserProfile = async (accessToken: string) => {
+    try {
+      setLoading(true);
+      const response = await authApi.get('/auth/me', {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      });
+
+      setUser(response.data.user);
+      localStorage.setItem('user', JSON.stringify(response.data.user));
+    } catch (error) {
+      console.error('Failed to fetch user profile:', error);
+      // Token không hợp lệ, xóa token
+      logout();
+    } finally {
+      setLoading(false);
+    }
+  };
   const login = (user: User, accessToken: string, refreshToken: string) => {
     localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
     localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
