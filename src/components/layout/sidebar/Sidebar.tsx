@@ -50,7 +50,7 @@ export default function Sidebar() {
                 <SidebarMenuButton asChild>
                   <NavLink to="/dashboard/residents" className="flex items-center gap-2">
                     <Users className="shrink-0" />
-                    <span>Cư dân</span>
+                    <span>Người dùng </span>
                   </NavLink>
                 </SidebarMenuButton>
               </SidebarMenuItem>
