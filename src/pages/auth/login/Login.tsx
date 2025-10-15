@@ -1,34 +1,29 @@
-import { authApi } from '@/config/axios';
 import { useAuth } from '@/contexts/AuthContext';
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
 
 export default function Login() {
+  const { login } = useAuth();
+  const navigate = useNavigate();
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const navigate = useNavigate();
-  const { setLoading, login } = useAuth();
-  const handleSubmit = async (e: React.MouseEvent<HTMLButtonElement>) => {
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('Login attempt:', { email, password });
+    setError(null);
     setLoading(true);
     try {
-      const res = await authApi.post(
-        '/auth/login',
-        { email, password },
-        {
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        },
-      );
-
-      const data = await res.data;
-      login(data.user, data.access_token, data.refresh_token);
+      await login({ email, password });
       navigate('/dashboard', { replace: true });
-    } catch (error) {
-      console.log(error);
-      alert('Email hoặc mật khẩu không đúng');
+    } catch (error: any) {
+      let msg = 'Email hoặc mật khẩu không đúng';
+      if (error?.response?.status === 500) {
+        msg = 'Hệ thống đang bảo trì. Vui lòng thử lại sau';
+      }
+      setError(msg);
     } finally {
       setLoading(false);
     }
@@ -44,7 +39,7 @@ export default function Login() {
           </div>
         </div>
 
-        <div className="space-y-6">
+        <form className="space-y-6">
           <div>
             <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
               Email
@@ -64,7 +59,7 @@ export default function Login() {
               <label htmlFor="password" className="block text-sm font-medium text-gray-700">
                 Password
               </label>
-              <a href="#" className="text-xs text-primary hover:text-blue-800 hover:font-semibold">
+              <a tabIndex={-1} href="#" className="text-xs text-primary hover:text-blue-800 hover:font-semibold">
                 Forgot password?
               </a>
             </div>
@@ -78,13 +73,16 @@ export default function Login() {
             />
           </div>
 
+          {error && <p className="text-red-600">{error}</p>}
           <button
             onClick={handleSubmit}
+            disabled={loading}
+            type={loading ? 'button' : 'submit'}
             className="w-full bg-primary text-white py-3 px-4 rounded-lg font-semibold text-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors"
           >
-            Sign in
+            {loading ? 'Signing in...' : 'Sign in'}
           </button>
-        </div>
+        </form>
       </div>
     </div>
   );

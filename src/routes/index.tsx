@@ -63,7 +63,11 @@ const router = createBrowserRouter([
   },
   {
     path: '/unauthorized',
-    element: <Unauthorized />,
+    element: (
+      <PrivateRoute>
+        <Unauthorized />
+      </PrivateRoute>
+    ),
   },
   {
     path: '*',

@@ -1,87 +1,59 @@
 import { authApi } from '@/config/axios';
-import { ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY } from '@/config/constants';
+import { ACCESS_TOKEN_KEY } from '@/config/constants';
+import type { LoginPayload, LoginResponse, MeResponse } from '@/types/auth';
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 
-interface User {
-  id: number;
-  name: string;
-  email: string;
-  phone: string;
-  role: string;
-}
-
 interface AuthContextType {
-  user: User | null;
+  user: MeResponse | null;
   token: string | null;
   loading: boolean;
-  setLoading: (value: boolean) => void;
-  login: (user: User, accessToken: string, refreshToken: string) => void;
-  logout: () => void;
+  login: (payload: LoginPayload) => Promise<void>;
+  logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [token, setToken] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [user, setUser] = useState<MeResponse | null>(null);
+  const [token, setToken] = useState<string | null>(() => localStorage.getItem(ACCESS_TOKEN_KEY));
+  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const savedUser = localStorage.getItem('user');
-    const savedToken = localStorage.getItem(ACCESS_TOKEN_KEY);
-
-    if (savedUser) setUser(JSON.parse(savedUser));
-    if (savedToken) setToken(savedToken);
-  }, []);
-
-  useEffect(() => {
-    const savedToken = localStorage.getItem(ACCESS_TOKEN_KEY);
-    if (savedToken) {
-      setToken(savedToken);
-      fetchUserProfile(savedToken);
-    }
-  }, []);
-
-  const fetchUserProfile = async (accessToken: string) => {
+  const fetchUserProfile = async () => {
+    if (!token) return;
     try {
-      setLoading(true);
-      const response = await authApi.get('/auth/me', {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-      });
-
-      setUser(response.data.user);
-      localStorage.setItem('user', JSON.stringify(response.data.user));
-    } catch (error) {
-      console.error('Failed to fetch user profile:', error);
-      // Token không hợp lệ, xóa token
-      logout();
-    } finally {
-      setLoading(false);
+      const { data } = await authApi.get<MeResponse>('/auth/me');
+      setUser(data);
+    } catch {
+      // logout();
     }
   };
-  const login = (user: User, accessToken: string, refreshToken: string) => {
-    localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
-    localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
-    localStorage.setItem('user', JSON.stringify(user));
 
-    setUser(user);
-    setToken(accessToken);
+  const login = async (payload: LoginPayload) => {
+    const { data } = await authApi.post<LoginResponse>('/auth/login', payload);
+    localStorage.setItem(ACCESS_TOKEN_KEY, data.access_token);
+    setToken(data.access_token);
+    await fetchUserProfile();
   };
 
-  const logout = () => {
+  const logout = async () => {
+    try {
+      await authApi.post('/auth/logout');
+    } catch {
+      /* empty */
+    }
     localStorage.removeItem(ACCESS_TOKEN_KEY);
-    localStorage.removeItem(REFRESH_TOKEN_KEY);
-    localStorage.removeItem('user');
-
     setUser(null);
     setToken(null);
   };
 
-  return (
-    <AuthContext.Provider value={{ user, token, loading, setLoading, login, logout }}>{children}</AuthContext.Provider>
-  );
+  useEffect(() => {
+    (async () => {
+      if (token) await fetchUserProfile();
+      setLoading(false);
+    })();
+  }, [token]);
+
+  return <AuthContext.Provider value={{ user, token, loading, login, logout }}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {

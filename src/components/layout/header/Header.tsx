@@ -3,7 +3,6 @@ import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Separator } from '@/components/ui/separator';
 import { SidebarTrigger } from '@/components/ui/sidebar';
-import { ThemeToggle } from '@/components/ThemeToggle';
 import { Bell } from 'lucide-react';
 import {
   DropdownMenu,
@@ -22,15 +21,7 @@ export default function Header() {
   const { logout: logoutContext } = useAuth();
   async function logout() {
     try {
-      await authApi.post(
-        '/auth/logout',
-        {},
-        {
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        },
-      );
+      await authApi.post('/auth/logout');
     } catch (error) {
       console.error(error);
     } finally {
@@ -55,7 +46,7 @@ export default function Header() {
             <Bell className="h-5 w-5" />
           </Button>
 
-          <ThemeToggle />
+          {/* <ThemeToggle /> */}
 
           {/* <Avatar className="h-8 w-8">
             <AvatarFallback>AD</AvatarFallback>
