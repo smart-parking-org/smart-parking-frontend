@@ -5,7 +5,6 @@ import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useState } from 'react';
-import VehicleTypesManagement from '@/components/VehicleTypesManagement';
 
 export default function Config() {
   // Giá theo giờ nhiều loại phương tiện
@@ -59,7 +58,6 @@ export default function Config() {
         <h1 className="text-2xl font-bold tracking-tight">Cấu hình & Chính sách</h1>
         <p className="text-muted-foreground">Giờ cao điểm, mức giá và chính sách gia hạn.</p>
       </div>
-      <VehicleTypesManagement />
       <div className="grid gap-6 md:grid-cols-2">
         {/* Giá theo giờ */}
         <Card>

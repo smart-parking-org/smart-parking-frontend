@@ -6,7 +6,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useAuth } from '@/contexts/AuthContext';
 import { authApi } from '@/config/axios';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
@@ -17,34 +16,24 @@ interface User {
   name: string;
   email: string;
   phone: string;
-  apartment_code: string;
-  status: string;
+  is_active: string;
   created_at: string;
   deleted_at?: string | null;
 }
 
 interface Vehicle {
   id: number;
-  name: string;
   license_plate: string;
+  vehicle_type: 'motorbike' | 'car_4_seat' | 'car_7_seat' | 'light_truck';
   is_active?: boolean;
-  type?: { id: number; name: string } | null;
-}
-
-interface UserDetail extends User {
-  approver?: { id: number; name: string } | null;
-  rejected_reason?: string | null;
-  vehicles?: Vehicle[];
+  is_primary?: boolean;
 }
 
 export default function Users() {
-  const { token } = useAuth();
-
   const [Users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
-  const [status, setStatus] = useState<string>('all');
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [totalPages, setTotalPages] = useState(1);
@@ -56,22 +45,20 @@ export default function Users() {
     name: '',
     email: '',
     phone: '',
-    apartment_code: '',
     password: '',
-    role: 'User',
+    role: 'resident',
   });
 
   // --- Detail dialog + edit state ---
   const [openDetail, setOpenDetail] = useState(false);
-  const [selectedUser, setSelectedUser] = useState<UserDetail | null>(null);
+  const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [editPayload, setEditPayload] = useState({
     name: '',
     email: '',
     phone: '',
-    apartment_code: '',
-    role: 'User',
+    role: 'resident',
   });
 
   // --- Vehicles under detail (separate API) ---
@@ -91,19 +78,18 @@ export default function Users() {
   // Reset page when filters change
   useEffect(() => {
     setPage(1);
-  }, [debouncedSearch, status, limit]);
+  }, [debouncedSearch, limit]);
 
   // Fetch list when page/limit/search/status change
   useEffect(() => {
     fetchUsers();
-  }, [page, limit, debouncedSearch, status, trashed]);
+  }, [page, limit, debouncedSearch, trashed]);
 
   const fetchUsers = async () => {
     try {
       setLoading(true);
       const params: any = { page, limit, trashed };
       if (debouncedSearch) params.search = debouncedSearch;
-      if (status !== 'all') params.status = status;
 
       const res = await authApi.get('/users', {
         params,
@@ -128,10 +114,10 @@ export default function Users() {
         alert('Vui lòng nhập tên, email và mật khẩu');
         return;
       }
-      await authApi.post('/users', newUser, { headers: { Authorization: `Bearer ${token}` } });
+      await authApi.post('/users', newUser, {});
       alert('Tạo người dùng thành công');
       setOpenCreate(false);
-      setNewUser({ name: '', email: '', phone: '', apartment_code: '', password: '', role: 'User' });
+      setNewUser({ name: '', email: '', phone: '', password: '', role: 'resident' });
       fetchUsers();
     } catch (err: any) {
       console.error('create error', err);
@@ -151,8 +137,7 @@ export default function Users() {
         name: d.name || '',
         email: d.email || '',
         phone: d.phone || '',
-        apartment_code: d.apartment_code || '',
-        role: (d as any).role || 'User',
+        role: (d as any).role || 'resident',
       });
       setOpenDetail(true);
       // also fetch vehicles separately
@@ -222,46 +207,12 @@ export default function Users() {
   const handleRestoreUser = async (id: number) => {
     if (!confirm('Khôi phục người dùng này?')) return;
     try {
-      await authApi.post(`/users/restore/${id}`, {}, { headers: { Authorization: `Bearer ${token}` } });
+      await authApi.post(`/users/restore/${id}`, {}, {});
       alert('Đã khôi phục người dùng');
       fetchUsers(); // cập nhật lại danh sách
     } catch (err) {
       console.error('restore from list', err);
       alert('Không thể khôi phục người dùng');
-    }
-  };
-
-  // --- Approve / Reject ---
-  const handleApproveUser = async () => {
-    if (!selectedUser) return;
-    if (!confirm('Duyệt tài khoản này?')) return;
-    try {
-      await authApi.patch(`admin/users/${selectedUser.id}/approve`, {}, {});
-      alert('Đã duyệt');
-      await fetchUserDetail(selectedUser.id);
-      fetchUsers();
-    } catch (err) {
-      console.error('approve', err);
-      alert('Không thể duyệt');
-    }
-  };
-
-  const handleRejectUser = async () => {
-    if (!selectedUser) return;
-    const reason = prompt('Nhập lý do từ chối:');
-    if (!reason || reason.trim() === '') {
-      alert('Vui lòng nhập lý do');
-      return;
-    }
-    if (!confirm('Xác nhận từ chối tài khoản?')) return;
-    try {
-      await authApi.patch(`admin/users/${selectedUser.id}/reject`, { reason: reason.trim() }, {});
-      alert('Đã từ chối');
-      await fetchUserDetail(selectedUser.id);
-      fetchUsers();
-    } catch (err) {
-      console.error('reject', err);
-      alert('Không thể từ chối');
     }
   };
 
@@ -302,13 +253,7 @@ export default function Users() {
                   <Label>Số điện thoại</Label>
                   <Input value={newUser.phone} onChange={(e) => setNewUser({ ...newUser, phone: e.target.value })} />
                 </div>
-                <div>
-                  <Label>Căn hộ</Label>
-                  <Input
-                    value={newUser.apartment_code}
-                    onChange={(e) => setNewUser({ ...newUser, apartment_code: e.target.value })}
-                  />
-                </div>
+
                 <div>
                   <Label>Mật khẩu</Label>
                   <Input
@@ -337,18 +282,6 @@ export default function Users() {
             />
             <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
           </div>
-
-          <Select value={status} onValueChange={(v) => setStatus(v)}>
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="Trạng thái" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Tất cả</SelectItem>
-              <SelectItem value="pending">Chờ duyệt</SelectItem>
-              <SelectItem value="approved">Đã duyệt</SelectItem>
-              <SelectItem value="rejected">Đã từ chối</SelectItem>
-            </SelectContent>
-          </Select>
 
           <Select value={trashed} onValueChange={setTrashed}>
             <SelectTrigger className="w-[180px]">
@@ -393,9 +326,8 @@ export default function Users() {
                     <TableHead>Họ tên</TableHead>
                     <TableHead>Email</TableHead>
                     <TableHead>Điện thoại</TableHead>
-                    <TableHead>Căn hộ</TableHead>
-                    <TableHead>Trạng thái</TableHead>
                     <TableHead>Ngày tạo</TableHead>
+                    <TableHead>Trạng thái</TableHead>
                     <TableHead></TableHead>
                   </TableRow>
                 </TableHeader>
@@ -416,18 +348,6 @@ export default function Users() {
                         <TableCell className="font-medium">{r.name}</TableCell>
                         <TableCell>{r.email}</TableCell>
                         <TableCell>{r.phone}</TableCell>
-                        <TableCell>
-                          <Badge variant="secondary">{r.apartment_code}</Badge>
-                        </TableCell>
-                        <TableCell>
-                          {r.status === 'approved' ? (
-                            <Badge className="bg-green-50 text-green-700 border-green-200">Đã duyệt</Badge>
-                          ) : r.status === 'rejected' ? (
-                            <Badge className="bg-red-50 text-red-700 border-red-200">Đã từ chối</Badge>
-                          ) : (
-                            <Badge className="bg-yellow-50 text-yellow-700 border-yellow-200">Chờ duyệt</Badge>
-                          )}
-                        </TableCell>
                         <TableCell>{new Date(r.created_at).toLocaleDateString()}</TableCell>
                         <TableCell className="flex items-center gap-2">
                           {r.deleted_at ? (
@@ -519,41 +439,10 @@ export default function Users() {
                       <strong>Điện thoại:</strong> {selectedUser.phone}
                     </div>
                     <div>
-                      <strong>Căn hộ:</strong> {selectedUser.apartment_code}
-                    </div>
-                    <div>
-                      <strong>Trạng thái:</strong>{' '}
-                      {selectedUser.status === 'approved' ? (
-                        <Badge className="bg-green-50 text-green-700 border-green-200">Đã duyệt</Badge>
-                      ) : selectedUser.status === 'rejected' ? (
-                        <Badge className="bg-red-50 text-red-700 border-red-200">Đã từ chối</Badge>
-                      ) : (
-                        <Badge className="bg-yellow-50 text-yellow-700 border-yellow-200">Chờ duyệt</Badge>
-                      )}
-                    </div>
-                    {selectedUser.rejected_reason && (
-                      <div>
-                        <strong>Lý do từ chối:</strong> {selectedUser.rejected_reason}
-                      </div>
-                    )}
-                    <div>
-                      <strong>Người duyệt:</strong> {selectedUser.approver?.name || '—'}
-                    </div>
-                    <div>
                       <strong>Ngày tạo:</strong> {new Date(selectedUser.created_at).toLocaleString()}
                     </div>
 
                     <div className="flex gap-2 mt-3">
-                      {selectedUser.status === 'pending' && (
-                        <>
-                          <Button size="sm" onClick={handleApproveUser}>
-                            Duyệt
-                          </Button>
-                          <Button size="sm" variant="outline" onClick={handleRejectUser}>
-                            Từ chối
-                          </Button>
-                        </>
-                      )}
                       <Button
                         size="sm"
                         variant="ghost"
@@ -595,13 +484,7 @@ export default function Users() {
                         onChange={(e) => setEditPayload({ ...editPayload, phone: e.target.value })}
                       />
                     </div>
-                    <div>
-                      <Label>Căn hộ</Label>
-                      <Input
-                        value={editPayload.apartment_code}
-                        onChange={(e) => setEditPayload({ ...editPayload, apartment_code: e.target.value })}
-                      />
-                    </div>
+
                     <div className="flex gap-2">
                       <Button onClick={handleUpdateUser}>Lưu</Button>
                       <Button variant="outline" onClick={() => setEditMode(false)}>
@@ -661,20 +544,46 @@ export default function Users() {
                     <Table className="mt-2">
                       <TableHeader>
                         <TableRow>
-                          <TableHead>Tên</TableHead>
                           <TableHead>Biển số</TableHead>
                           <TableHead>Loại</TableHead>
                           <TableHead>Trạng thái</TableHead>
+                          <TableHead></TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {vehicles.map((v) => (
-                          <TableRow key={v.id}>
-                            <TableCell>{v.name}</TableCell>
-                            <TableCell>{v.license_plate}</TableCell>
-                            <TableCell>{v.type?.name || '-'}</TableCell>
-                          </TableRow>
-                        ))}
+                        {vehicles
+                          ?.slice() // sao chép mảng
+                          .sort((a, b) => {
+                            if (a.is_primary && !b.is_primary) return -1; // a là xe chính => lên đầu
+                            if (!a.is_primary && b.is_primary) return 1; // b là xe chính => lên đầu
+                            return 0; // giữ nguyên
+                          })
+                          .map((v) => (
+                            <TableRow key={v.id}>
+                              <TableCell>{v.license_plate}</TableCell>
+                              <TableCell>
+                                {v.vehicle_type === 'motorbike'
+                                  ? 'Xe máy'
+                                  : v.vehicle_type === 'car_4_seat'
+                                    ? 'Xe 4 chỗ'
+                                    : v.vehicle_type === 'car_7_seat'
+                                      ? 'Xe 7 chỗ'
+                                      : v.vehicle_type === 'light_truck'
+                                        ? 'Xe tải nhẹ'
+                                        : '-'}
+                              </TableCell>
+                              <TableCell>
+                                {v.is_active ? (
+                                  <Badge className="bg-green-50 text-green-700">Hoạt động</Badge>
+                                ) : (
+                                  <Badge className="bg-red-50 text-red-700">Ngừng</Badge>
+                                )}
+                              </TableCell>
+                              <TableCell>
+                                {v.is_primary ? <Badge className="bg-blue-50 text-blue-700">Xe chính</Badge> : ''}
+                              </TableCell>
+                            </TableRow>
+                          ))}
                       </TableBody>
                     </Table>
                   </ScrollArea>

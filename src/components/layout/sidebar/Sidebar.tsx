@@ -13,7 +13,7 @@ import {
   SidebarRail,
   SidebarSeparator,
 } from '@/components/ui/sidebar';
-import { Home, LayoutDashboard, Settings, Users, FileText } from 'lucide-react';
+import { Home, LayoutDashboard, Settings, Users, FileText, Car } from 'lucide-react';
 
 export default function Sidebar() {
   return (
@@ -48,9 +48,17 @@ export default function Sidebar() {
               </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild>
-                  <NavLink to="/dashboard/residents" className="flex items-center gap-2">
+                  <NavLink to="/dashboard/users" className="flex items-center gap-2">
                     <Users className="shrink-0" />
-                    <span>Người dùng </span>
+                    <span>Người dùng</span>
+                  </NavLink>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild>
+                  <NavLink to="/dashboard/vehicles" className="flex items-center gap-2">
+                    <Car className="shrink-0" />
+                    <span>Phương tiện</span>
                   </NavLink>
                 </SidebarMenuButton>
               </SidebarMenuItem>

@@ -15,6 +15,7 @@ import PrivateRoute from '@/components/PrivateRoute';
 import { PublicRoute } from '@/components/PublicRoute';
 import Unauthorized from '@/pages/unauthorized';
 import Users from '@/pages/dashboard/Users';
+import Vehicles from '@/pages/dashboard/Vehicles';
 
 const router = createBrowserRouter([
   {
@@ -48,8 +49,12 @@ const router = createBrowserRouter([
         element: <Parking />,
       },
       {
-        path: 'residents',
+        path: 'users',
         element: <Users />,
+      },
+      {
+        path: 'vehicles',
+        element: <Vehicles />,
       },
       {
         path: 'config',
