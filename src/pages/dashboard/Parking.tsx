@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { reservationApi } from '@/config/axios';
 import { Card } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
+import ENV from '@/config/env';
 
 // ==== Kiểu dữ liệu ====
 interface ParkingLot {
@@ -17,6 +18,7 @@ interface ParkingSlot {
   parking_lot_id: number;
   slot_code: string;
   vehicle_type: string;
+  effective_status: string;
   status: string;
   position_x: number;
   position_y: number;
@@ -29,6 +31,7 @@ export default function ParkingLots() {
   const [selectedLot, setSelectedLot] = useState<ParkingLot | null>(null);
   const [slots, setSlots] = useState<ParkingSlot[]>([]);
   const [loading, setLoading] = useState(false);
+  const sseRef = useRef<EventSource | null>(null);
 
   // Bộ lọc
   const [lotFilter, setLotFilter] = useState<string>('all');
@@ -50,16 +53,13 @@ export default function ParkingLots() {
   const fetchSlots = async (lot: ParkingLot) => {
     setLoading(true);
     try {
-      const params: any = {
-        parking_lot_id: lot.id,
-      };
+      const params: any = {};
       if (vehicleType !== 'all') params.vehicle_type = vehicleType;
       if (status !== 'all') params.status = status;
 
-      const res = await reservationApi.get('/slots', { params });
-      const data = Array.isArray(res.data) ? res.data : res.data.data || [];
-      setSlots(data);
-      setSelectedLot(lot);
+      const res = await reservationApi.get(`/parking-lots/${lot.id}/slots`);
+      setSlots(res.data.slots || []);
+      setSelectedLot(res.data.parking_lot || lot);
     } catch (err) {
       console.error('Lỗi tải chỗ đỗ:', err);
     } finally {
@@ -76,15 +76,64 @@ export default function ParkingLots() {
   useEffect(() => {
     fetchParkingLots();
   }, []);
-  // Tự động lọc khi chọn loại xe hoặc trạng thái
+
+  // Kết nối SSE theo bãi đã chọn
   useEffect(() => {
-    if (selectedLot) {
-      fetchSlots(selectedLot);
-    }
-  }, [vehicleType, status]);
+    let reconnectTimer: any = null;
+    const connect = () => {
+      // đóng kết nối cũ nếu có
+      if (sseRef.current) {
+        sseRef.current.close();
+        sseRef.current = null;
+      }
+
+      if (!selectedLot) return;
+
+      const url = `${ENV.RESERVATION_API_URL}/parking-lots/${selectedLot.id}/stream`;
+      const es = new EventSource(url);
+      sseRef.current = es;
+
+      es.onmessage = (evt) => {
+        try {
+          const payload = JSON.parse(evt.data);
+          if (payload?.slots) {
+            setSlots(payload.slots);
+          }
+        } catch (e) {
+          console.error('SSE parse error:', e);
+        }
+      };
+
+      es.onerror = (err) => {
+        console.warn('SSE error, sẽ tự kết nối lại sau 2s:', err);
+        es.close();
+        if (!reconnectTimer) {
+          reconnectTimer = setTimeout(() => {
+            reconnectTimer = null;
+            connect();
+          }, 3000);
+        }
+      };
+    };
+
+    if (selectedLot) connect();
+
+    return () => {
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      if (sseRef.current) sseRef.current.close();
+      sseRef.current = null;
+    };
+  }, [selectedLot?.id]);
 
   // ====== LỌC DANH SÁCH BÃI ======
   const filteredLots = lotFilter === 'all' ? lots : lots.filter((lot) => lot.id === Number(lotFilter));
+
+  // ====== LỌC CHỖ ĐỖ ======
+  const displayedSlots = slots.filter((s) => {
+    const matchVehicle = vehicleType === 'all' || s.vehicle_type === vehicleType;
+    const matchStatus = status === 'all' || s.effective_status === status;
+    return matchVehicle && matchStatus;
+  });
 
   return (
     <Card className="mt-6 p-4">
@@ -172,7 +221,7 @@ export default function ParkingLots() {
             <div className="text-center text-gray-500 py-10">Đang tải danh sách chỗ đỗ...</div>
           ) : (
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3 max-h-[650px] overflow-y-auto pr-2">
-              {slots.map((slot) => {
+              {displayedSlots.map((slot) => {
                 const vehicleLabel =
                   slot.vehicle_type === 'motorbike'
                     ? 'Xe máy'
@@ -183,12 +232,16 @@ export default function ParkingLots() {
                         : 'Xe tải nhẹ';
 
                 const statusLabel =
-                  slot.status === 'available' ? 'Còn trống' : slot.status === 'occupied' ? 'Đang sử dụng' : 'Đã đặt';
+                  slot.effective_status === 'available'
+                    ? 'Còn trống'
+                    : slot.effective_status === 'occupied'
+                      ? 'Đang sử dụng'
+                      : 'Đã đặt';
 
                 const bgClass =
-                  slot.status === 'available'
+                  slot.effective_status === 'available'
                     ? 'bg-green-100 border-green-400'
-                    : slot.status === 'occupied'
+                    : slot.effective_status === 'occupied'
                       ? 'bg-red-100 border-red-400'
                       : 'bg-yellow-100 border-yellow-400';
 
@@ -204,7 +257,7 @@ export default function ParkingLots() {
                 );
               })}
 
-              {!loading && slots.length === 0 && (
+              {!loading && displayedSlots.length === 0 && (
                 <div className="col-span-full text-center text-gray-500 py-10">Không có chỗ đỗ phù hợp</div>
               )}
             </div>
