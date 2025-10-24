@@ -16,6 +16,7 @@ import { PublicRoute } from '@/components/PublicRoute';
 import Unauthorized from '@/pages/unauthorized';
 import Users from '@/pages/dashboard/Users';
 import Vehicles from '@/pages/dashboard/Vehicles';
+import Reservations from '@/pages/dashboard/Reservation';
 
 const router = createBrowserRouter([
   {
@@ -55,6 +56,10 @@ const router = createBrowserRouter([
       {
         path: 'vehicles',
         element: <Vehicles />,
+      },
+      {
+        path: 'reservations',
+        element: <Reservations />,
       },
       {
         path: 'config',

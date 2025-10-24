@@ -27,7 +27,6 @@ export default function ParkingLotStats() {
   const [vehicleType, setVehicleType] = useState<string>('all');
   const [chartData, setChartData] = useState<any[]>([]);
 
-  // 🧠 Giả sử ID bãi đỗ là 1 (bạn có thể thay bằng dynamic param từ router)
   const parkingLotId = 1;
 
   useEffect(() => {
