@@ -354,7 +354,15 @@ export default function Reservations() {
       }
 
       setCreateLoading(true);
-      const res = await reservationApi.post('/reservations', newReservation);
+      const localDateTime = new Date(newReservation.desired_start_time);
+      const utcDateTime = localDateTime.toISOString();
+
+      const payload = {
+        ...newReservation,
+        desired_start_time: utcDateTime,
+      };
+
+      const res = await reservationApi.post('/reservations', payload);
       const data: CreateReservationResponse = res.data;
 
       if (data.success) {
@@ -445,14 +453,13 @@ export default function Reservations() {
         day: '2-digit',
         hour: '2-digit',
         minute: '2-digit',
-        hour12: false
+        hour12: false,
       });
     } catch (error) {
       console.error('Error formatting date:', error);
       return 'Invalid Date';
     }
   };
-
 
   const formatDuration = (minutes: number) => {
     if (!minutes || isNaN(minutes)) return 'N/A';
@@ -470,15 +477,16 @@ export default function Reservations() {
 
   const calculatePrice = (pricing: PricingSnapshot, durationMinutes: number) => {
     if (!pricing || !durationMinutes) return 0;
-    
+
     // Lấy giá từ value object hoặc từ pricing trực tiếp
     const hourlyRate = pricing.value?.hourly || pricing.hourly || pricing.base_price_per_hour || 0;
-    const peakMultiplier = pricing.value?.peak_multiplier || pricing.peak_multiplier || pricing.peak_hour_multiplier || 1;
-    
+    const peakMultiplier =
+      pricing.value?.peak_multiplier || pricing.peak_multiplier || pricing.peak_hour_multiplier || 1;
+
     const hours = durationMinutes / 60;
     const basePrice = hourlyRate * hours;
     const totalPrice = basePrice * peakMultiplier;
-    
+
     return Math.round(totalPrice);
   };
 
@@ -726,20 +734,34 @@ export default function Reservations() {
                           onClick={() => openDetailDialog(reservation)}
                         >
                           <TableCell className="font-medium">{reservation.reservation_code}</TableCell>
-                          <TableCell>{reservation.plate || reservation.vehicle_snapshot?.plate || reservation.vehicle_snapshot?.license_plate || 'N/A'}</TableCell>
                           <TableCell>
-                            {getVehicleTypeLabel(reservation.vehicle_snapshot?.type || reservation.vehicle_snapshot?.vehicle_type || '')}
+                            {reservation.plate ||
+                              reservation.vehicle_snapshot?.plate ||
+                              reservation.vehicle_snapshot?.license_plate ||
+                              'N/A'}
+                          </TableCell>
+                          <TableCell>
+                            {getVehicleTypeLabel(
+                              reservation.vehicle_snapshot?.type || reservation.vehicle_snapshot?.vehicle_type || '',
+                            )}
                           </TableCell>
                           <TableCell>{reservation.slot?.slot_code || 'N/A'}</TableCell>
                           <TableCell>
                             <div>
                               <div className="font-medium">{reservation.user_snapshot?.name || 'N/A'}</div>
-                              <div className="text-sm text-muted-foreground">{reservation.user_snapshot?.phone || 'N/A'}</div>
+                              <div className="text-sm text-muted-foreground">
+                                {reservation.user_snapshot?.phone || 'N/A'}
+                              </div>
                             </div>
                           </TableCell>
                           <TableCell>{getStatusBadge(reservation.status)}</TableCell>
                           <TableCell>{formatDateTimeShort(reservation.start_time)}</TableCell>
-                          <TableCell>{formatDuration(reservation.duration_minutes || calculateDurationMinutes(reservation.start_time, reservation.end_time))}</TableCell>
+                          <TableCell>
+                            {formatDuration(
+                              reservation.duration_minutes ||
+                                calculateDurationMinutes(reservation.start_time, reservation.end_time),
+                            )}
+                          </TableCell>
                           <TableCell>
                             <div className="flex items-center gap-1">
                               {/* Gia hạn - chỉ hiện khi confirmed và chưa gia hạn */}
@@ -1027,14 +1049,21 @@ export default function Reservations() {
                   <div>
                     <Label className="text-sm font-medium">Biển số</Label>
                     <div className="text-sm">
-                      {selectedReservation.plate || selectedReservation.vehicle_snapshot?.plate || selectedReservation.vehicle_snapshot?.license_plate || 'N/A'}
+                      {selectedReservation.plate ||
+                        selectedReservation.vehicle_snapshot?.plate ||
+                        selectedReservation.vehicle_snapshot?.license_plate ||
+                        'N/A'}
                     </div>
                   </div>
                   <div>
                     <Label className="text-sm font-medium">Loại xe</Label>
                     <div className="text-sm">
                       {selectedReservation.vehicle_snapshot?.type || selectedReservation.vehicle_snapshot?.vehicle_type
-                        ? getVehicleTypeLabel(selectedReservation.vehicle_snapshot.type || selectedReservation.vehicle_snapshot.vehicle_type || '')
+                        ? getVehicleTypeLabel(
+                            selectedReservation.vehicle_snapshot.type ||
+                              selectedReservation.vehicle_snapshot.vehicle_type ||
+                              '',
+                          )
                         : 'N/A'}
                     </div>
                   </div>
@@ -1115,8 +1144,12 @@ export default function Reservations() {
                   <div>
                     <Label className="text-sm font-medium">Thời lượng</Label>
                     <div className="text-sm">
-                      {selectedReservation.duration_minutes || calculateDurationMinutes(selectedReservation.start_time, selectedReservation.end_time)
-                        ? formatDuration(selectedReservation.duration_minutes || calculateDurationMinutes(selectedReservation.start_time, selectedReservation.end_time))
+                      {selectedReservation.duration_minutes ||
+                      calculateDurationMinutes(selectedReservation.start_time, selectedReservation.end_time)
+                        ? formatDuration(
+                            selectedReservation.duration_minutes ||
+                              calculateDurationMinutes(selectedReservation.start_time, selectedReservation.end_time),
+                          )
                         : 'N/A'}
                     </div>
                   </div>
@@ -1134,31 +1167,45 @@ export default function Reservations() {
                       <div>
                         <Label className="text-sm font-medium">Giá cơ bản/giờ</Label>
                         <div className="text-sm">
-                          {(selectedReservation.pricing_snapshot?.value?.hourly || 
-                            selectedReservation.pricing_snapshot?.hourly || 
-                            selectedReservation.pricing_snapshot?.base_price_per_hour || 0).toLocaleString()} VNĐ
+                          {(
+                            selectedReservation.pricing_snapshot?.value?.hourly ||
+                            selectedReservation.pricing_snapshot?.hourly ||
+                            selectedReservation.pricing_snapshot?.base_price_per_hour ||
+                            0
+                          ).toLocaleString()}{' '}
+                          VNĐ
                         </div>
                       </div>
                       <div>
                         <Label className="text-sm font-medium">Hệ số giờ cao điểm</Label>
                         <div className="text-sm">
-                          {(selectedReservation.pricing_snapshot?.value?.peak_multiplier || 
-                            selectedReservation.pricing_snapshot?.peak_multiplier || 
-                            selectedReservation.pricing_snapshot?.peak_hour_multiplier || 1)}x
+                          {selectedReservation.pricing_snapshot?.value?.peak_multiplier ||
+                            selectedReservation.pricing_snapshot?.peak_multiplier ||
+                            selectedReservation.pricing_snapshot?.peak_hour_multiplier ||
+                            1}
+                          x
                         </div>
                       </div>
                       <div>
                         <Label className="text-sm font-medium">Giá theo ngày</Label>
                         <div className="text-sm">
-                          {(selectedReservation.pricing_snapshot?.value?.daily_cap || 
-                            selectedReservation.pricing_snapshot?.daily_cap || 0).toLocaleString()} VNĐ
+                          {(
+                            selectedReservation.pricing_snapshot?.value?.daily_cap ||
+                            selectedReservation.pricing_snapshot?.daily_cap ||
+                            0
+                          ).toLocaleString()}{' '}
+                          VNĐ
                         </div>
                       </div>
                       <div>
                         <Label className="text-sm font-medium">Giá theo tháng</Label>
                         <div className="text-sm">
-                          {(selectedReservation.pricing_snapshot?.value?.monthly_pass || 
-                            selectedReservation.pricing_snapshot?.monthly_pass || 0).toLocaleString()} VNĐ
+                          {(
+                            selectedReservation.pricing_snapshot?.value?.monthly_pass ||
+                            selectedReservation.pricing_snapshot?.monthly_pass ||
+                            0
+                          ).toLocaleString()}{' '}
+                          VNĐ
                         </div>
                       </div>
                       <div className="col-span-2">
@@ -1166,14 +1213,14 @@ export default function Reservations() {
                         <div className="text-sm font-medium text-green-600">
                           {calculatePrice(
                             selectedReservation.pricing_snapshot,
-                            selectedReservation.duration_minutes || calculateDurationMinutes(selectedReservation.start_time, selectedReservation.end_time),
+                            selectedReservation.duration_minutes ||
+                              calculateDurationMinutes(selectedReservation.start_time, selectedReservation.end_time),
                           ).toLocaleString()}{' '}
                           VNĐ
                         </div>
                       </div>
                     </div>
                   </div>
-
                 </>
               )}
             </div>
