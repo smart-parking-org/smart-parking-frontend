@@ -10,6 +10,9 @@ import { authApi } from '@/config/axios';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { getUserViolations } from '@/services/violationApi';
+import type { Violation } from '@/types/violation';
 
 interface User {
   id: number;
@@ -68,6 +71,16 @@ export default function Users() {
   const [vehTotalPages, setVehTotalPages] = useState(1);
   const [vehLoading, setVehLoading] = useState(false);
   const [vehIsActiveFilter, setVehIsActiveFilter] = useState<string>('all');
+
+  // --- Violations under detail ---
+  const [violations, setViolations] = useState<Violation[]>([]);
+  const [violationsLoading, setViolationsLoading] = useState(false);
+  const [violationsSummary, setViolationsSummary] = useState<{
+    total_violations: number;
+    pending_count: number;
+    resolved_count: number;
+    total_fines: number;
+  } | null>(null);
 
   // Debounce search input
   useEffect(() => {
@@ -142,6 +155,8 @@ export default function Users() {
       setOpenDetail(true);
       // also fetch vehicles separately
       fetchVehiclesForUser(id, 1, vehLimit, vehIsActiveFilter);
+      // fetch violations
+      fetchUserViolations(id);
     } catch (err) {
       console.error('fetchUserDetail', err);
       alert('Không thể tải chi tiết người dùng');
@@ -169,6 +184,22 @@ export default function Users() {
       // ignore
     } finally {
       setVehLoading(false);
+    }
+  };
+
+  // --- Violations for user (Yêu cầu đề tài: Quản lý cư dân - lịch sử vi phạm) ---
+  const fetchUserViolations = async (userId: number) => {
+    try {
+      setViolationsLoading(true);
+      const res = await getUserViolations(userId, { per_page: 20 });
+      setViolations(res.data || []);
+      setViolationsSummary(res.summary || null);
+    } catch (err) {
+      console.error('fetchUserViolations', err);
+      setViolations([]);
+      setViolationsSummary(null);
+    } finally {
+      setViolationsLoading(false);
     }
   };
 
@@ -424,79 +455,97 @@ export default function Users() {
           {detailLoading ? (
             <div className="text-center py-10 text-muted-foreground">Đang tải...</div>
           ) : selectedUser ? (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              <div>
-                {/* Info / Edit form */}
-                {!editMode ? (
-                  <div className="space-y-2">
-                    <div>
-                      <strong>Họ tên:</strong> {selectedUser.name}
-                    </div>
-                    <div>
-                      <strong>Email:</strong> {selectedUser.email}
-                    </div>
-                    <div>
-                      <strong>Điện thoại:</strong> {selectedUser.phone}
-                    </div>
-                    <div>
-                      <strong>Ngày tạo:</strong> {new Date(selectedUser.created_at).toLocaleString()}
-                    </div>
+            <Tabs defaultValue="info" className="w-full">
+              <TabsList className="grid w-full grid-cols-3">
+                <TabsTrigger value="info">Thông tin</TabsTrigger>
+                <TabsTrigger value="vehicles">Phương tiện</TabsTrigger>
+                <TabsTrigger value="violations">
+                  Lịch sử vi phạm
+                  {violationsSummary && violationsSummary.total_violations > 0 && (
+                    <Badge variant="destructive" className="ml-2">
+                      {violationsSummary.total_violations}
+                    </Badge>
+                  )}
+                </TabsTrigger>
+              </TabsList>
 
-                    <div className="flex gap-2 mt-3">
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => {
-                          setEditMode(true);
-                        }}
-                      >
-                        Sửa
-                      </Button>
-                      <Button size="sm" variant="destructive" onClick={handleDeleteUser}>
-                        Xóa
-                      </Button>
-                      <Button size="sm" onClick={() => fetchUserDetail(selectedUser.id)}>
-                        Làm mới
-                      </Button>
-                    </div>
+              <TabsContent value="info" className="space-y-4">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  <div>
+                    {/* Info / Edit form */}
+                    {!editMode ? (
+                      <div className="space-y-2">
+                        <div>
+                          <strong>Họ tên:</strong> {selectedUser.name}
+                        </div>
+                        <div>
+                          <strong>Email:</strong> {selectedUser.email}
+                        </div>
+                        <div>
+                          <strong>Điện thoại:</strong> {selectedUser.phone}
+                        </div>
+                        <div>
+                          <strong>Ngày tạo:</strong> {new Date(selectedUser.created_at).toLocaleString()}
+                        </div>
+
+                        <div className="flex gap-2 mt-3">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => {
+                              setEditMode(true);
+                            }}
+                          >
+                            Sửa
+                          </Button>
+                          <Button size="sm" variant="destructive" onClick={handleDeleteUser}>
+                            Xóa
+                          </Button>
+                          <Button size="sm" onClick={() => fetchUserDetail(selectedUser.id)}>
+                            Làm mới
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      // Edit form
+                      <div className="space-y-3">
+                        <div>
+                          <Label>Họ tên</Label>
+                          <Input
+                            value={editPayload.name}
+                            onChange={(e) => setEditPayload({ ...editPayload, name: e.target.value })}
+                          />
+                        </div>
+                        <div>
+                          <Label>Email</Label>
+                          <Input
+                            value={editPayload.email}
+                            onChange={(e) => setEditPayload({ ...editPayload, email: e.target.value })}
+                          />
+                        </div>
+                        <div>
+                          <Label>Số điện thoại</Label>
+                          <Input
+                            value={editPayload.phone}
+                            onChange={(e) => setEditPayload({ ...editPayload, phone: e.target.value })}
+                          />
+                        </div>
+
+                        <div className="flex gap-2">
+                          <Button onClick={handleUpdateUser}>Lưu</Button>
+                          <Button variant="outline" onClick={() => setEditMode(false)}>
+                            Hủy
+                          </Button>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                ) : (
-                  // Edit form
-                  <div className="space-y-3">
-                    <div>
-                      <Label>Họ tên</Label>
-                      <Input
-                        value={editPayload.name}
-                        onChange={(e) => setEditPayload({ ...editPayload, name: e.target.value })}
-                      />
-                    </div>
-                    <div>
-                      <Label>Email</Label>
-                      <Input
-                        value={editPayload.email}
-                        onChange={(e) => setEditPayload({ ...editPayload, email: e.target.value })}
-                      />
-                    </div>
-                    <div>
-                      <Label>Số điện thoại</Label>
-                      <Input
-                        value={editPayload.phone}
-                        onChange={(e) => setEditPayload({ ...editPayload, phone: e.target.value })}
-                      />
-                    </div>
+                </div>
+              </TabsContent>
 
-                    <div className="flex gap-2">
-                      <Button onClick={handleUpdateUser}>Lưu</Button>
-                      <Button variant="outline" onClick={() => setEditMode(false)}>
-                        Hủy
-                      </Button>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Vehicles area */}
-              <div>
+              <TabsContent value="vehicles" className="space-y-4">
+                {/* Vehicles area */}
+                <div>
                 <div className="flex items-center justify-between">
                   <h4 className="text-lg font-medium">Phương tiện</h4>
                   <div className="flex items-center gap-2">
@@ -632,7 +681,138 @@ export default function Users() {
                   </Button>
                 </div>
               </div>
-            </div>
+              </TabsContent>
+
+              <TabsContent value="violations" className="space-y-4">
+                {/* Violations area - Yêu cầu đề tài: Quản lý cư dân - lịch sử vi phạm */}
+                <div>
+                  {violationsSummary && (
+                    <div className="grid grid-cols-4 gap-4 mb-4 p-4 bg-muted rounded-lg">
+                      <div>
+                        <div className="text-sm text-muted-foreground">Tổng vi phạm</div>
+                        <div className="text-2xl font-bold">{violationsSummary.total_violations}</div>
+                      </div>
+                      <div>
+                        <div className="text-sm text-muted-foreground">Chờ xử lý</div>
+                        <div className="text-2xl font-bold text-orange-600">{violationsSummary.pending_count}</div>
+                      </div>
+                      <div>
+                        <div className="text-sm text-muted-foreground">Đã xử lý</div>
+                        <div className="text-2xl font-bold text-green-600">{violationsSummary.resolved_count}</div>
+                      </div>
+                      <div>
+                        <div className="text-sm text-muted-foreground">Tổng tiền phạt</div>
+                        <div className="text-2xl font-bold text-red-600">
+                          {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(
+                            violationsSummary.total_fines || 0
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {violationsLoading ? (
+                    <div className="py-6 text-center text-muted-foreground">Đang tải lịch sử vi phạm...</div>
+                  ) : violations.length === 0 ? (
+                    <div className="py-6 text-center text-muted-foreground">Không có vi phạm nào</div>
+                  ) : (
+                    <ScrollArea className="max-h-[50vh]">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Ticket #</TableHead>
+                            <TableHead>Loại</TableHead>
+                            <TableHead>Mức độ</TableHead>
+                            <TableHead>Tiền phạt</TableHead>
+                            <TableHead>Trạng thái</TableHead>
+                            <TableHead>Thời gian</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {violations.map((v) => (
+                            <TableRow key={v.id}>
+                              <TableCell className="font-mono text-sm">{v.ticket_number || '-'}</TableCell>
+                              <TableCell>
+                                {v.type === 'OVERSTAY'
+                                  ? 'Đỗ quá giờ'
+                                  : v.type === 'LATE_CHECK_IN'
+                                    ? 'Check-in muộn'
+                                    : v.type === 'NO_SHOW'
+                                      ? 'Không đến'
+                                      : v.type === 'LATE_PAYMENT'
+                                        ? 'Thanh toán chậm'
+                                        : v.type === 'WRONG_SLOT'
+                                          ? 'Đỗ sai chỗ'
+                                          : v.type === 'NO_RESERVATION'
+                                            ? 'Đỗ không reservation'
+                                            : 'Khác'}
+                              </TableCell>
+                              <TableCell>
+                                <Badge
+                                  variant={
+                                    v.severity === 'CRITICAL'
+                                      ? 'destructive'
+                                      : v.severity === 'HIGH'
+                                        ? 'default'
+                                        : v.severity === 'MEDIUM'
+                                          ? 'secondary'
+                                          : 'outline'
+                                  }
+                                >
+                                  {v.severity === 'CRITICAL'
+                                    ? 'Nghiêm trọng'
+                                    : v.severity === 'HIGH'
+                                      ? 'Cao'
+                                      : v.severity === 'MEDIUM'
+                                        ? 'Trung bình'
+                                        : 'Thấp'}
+                                </Badge>
+                              </TableCell>
+                              <TableCell>
+                                {v.fine_amount
+                                  ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(
+                                      v.fine_amount
+                                    )
+                                  : '-'}
+                              </TableCell>
+                              <TableCell>
+                                <Badge
+                                  variant={
+                                    v.status === 'PENDING'
+                                      ? 'outline'
+                                      : v.status === 'RESOLVED'
+                                        ? 'default'
+                                        : v.status === 'CANCELLED'
+                                          ? 'secondary'
+                                          : 'destructive'
+                                  }
+                                >
+                                  {v.status === 'PENDING'
+                                    ? 'Chờ xử lý'
+                                    : v.status === 'RESOLVED'
+                                      ? 'Đã xử lý'
+                                      : v.status === 'CANCELLED'
+                                        ? 'Đã hủy'
+                                        : 'Đang khiếu nại'}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="text-sm">
+                                {v.violation_time
+                                  ? new Date(v.violation_time).toLocaleString('vi-VN', {
+                                      dateStyle: 'short',
+                                      timeStyle: 'short',
+                                    })
+                                  : '-'}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </ScrollArea>
+                  )}
+                </div>
+              </TabsContent>
+            </Tabs>
           ) : (
             <div className="text-center py-8 text-muted-foreground">Không có dữ liệu</div>
           )}

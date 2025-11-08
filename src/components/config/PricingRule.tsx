@@ -154,16 +154,6 @@ const PricingRule = ({ selectedLotId }: PricingRuleProps) => {
     return names[vehicleType];
   };
 
-  const getVehicleIcon = (vehicleType: VehicleType): string => {
-    const icons = {
-      motorbike: '🏍️',
-      car_4_seat: '🚗',
-      car_7_seat: '🚐',
-      light_truck: '🚛',
-    };
-    return icons[vehicleType];
-  };
-
   // ==== Effects ====
   useEffect(() => {
     fetchPricingRules();
@@ -173,10 +163,7 @@ const PricingRule = ({ selectedLotId }: PricingRuleProps) => {
     return (
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <span>💰</span>
-            Bảng giá theo loại xe
-          </CardTitle>
+          <CardTitle>Bảng giá theo loại xe</CardTitle>
           <p className="text-sm text-muted-foreground">Cấu hình giá cho từng loại phương tiện</p>
         </CardHeader>
         <CardContent className="space-y-6 p-6">
@@ -191,10 +178,7 @@ const PricingRule = ({ selectedLotId }: PricingRuleProps) => {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <span>💰</span>
-          Bảng giá theo loại xe
-        </CardTitle>
+        <CardTitle className="flex items-center gap-2">Bảng giá theo loại xe</CardTitle>
         <p className="text-sm text-muted-foreground">Cấu hình giá cho từng loại phương tiện</p>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -216,10 +200,7 @@ const PricingRule = ({ selectedLotId }: PricingRuleProps) => {
               {Object.entries(pricingForms).map(([vehicleType, pricing]) => (
                 <TableRow key={vehicleType}>
                   <TableCell className="font-medium">
-                    <div className="flex items-center gap-2">
-                      <span className="text-lg">{getVehicleIcon(vehicleType as VehicleType)}</span>
-                      <span className="text-sm">{getVehicleTypeName(vehicleType as VehicleType)}</span>
-                    </div>
+                    <span className="text-sm">{getVehicleTypeName(vehicleType as VehicleType)}</span>
                   </TableCell>
                   <TableCell>
                     <Input

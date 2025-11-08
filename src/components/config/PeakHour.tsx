@@ -254,10 +254,7 @@ const PeakHour = ({ selectedLotId }: PeakHourProps) => {
     return (
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <span>⏰</span>
-            Giờ cao điểm
-          </CardTitle>
+          <CardTitle>Giờ cao điểm</CardTitle>
           <p className="text-sm text-muted-foreground">Cấu hình khung giờ có mức giá cao hơn</p>
         </CardHeader>
         <CardContent className="space-y-6 p-6">
@@ -272,16 +269,12 @@ const PeakHour = ({ selectedLotId }: PeakHourProps) => {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <span>⏰</span>
-          Giờ cao điểm
-        </CardTitle>
+        <CardTitle className="flex items-center gap-2">Giờ cao điểm</CardTitle>
         <p className="text-sm text-muted-foreground">Cấu hình khung giờ có mức giá cao hơn</p>
       </CardHeader>
       <CardContent className="space-y-6">
         {peakForms.length === 0 ? (
           <div className="text-center py-8 border-2 border-dashed border-muted-foreground/25 rounded-lg">
-            <div className="text-4xl mb-4">⏰</div>
             <p className="text-muted-foreground mb-4">Chưa có giờ cao điểm nào được cấu hình</p>
             <Button variant="outline" onClick={addPeakHour}>
               Thêm giờ cao điểm đầu tiên

@@ -17,6 +17,8 @@ import Unauthorized from '@/pages/unauthorized';
 import Users from '@/pages/dashboard/Users';
 import Vehicles from '@/pages/dashboard/Vehicles';
 import Reservations from '@/pages/dashboard/Reservation';
+import MonthlyPass from '@/pages/dashboard/MonthlyPass';
+import Violations from '@/pages/dashboard/Violations';
 
 const router = createBrowserRouter([
   {
@@ -60,6 +62,14 @@ const router = createBrowserRouter([
       {
         path: 'reservations',
         element: <Reservations />,
+      },
+      {
+        path: 'monthly-passes',
+        element: <MonthlyPass />,
+      },
+      {
+        path: 'violations',
+        element: <Violations />,
       },
       {
         path: 'config',

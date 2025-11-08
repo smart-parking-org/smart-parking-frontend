@@ -91,6 +91,7 @@ interface Reservation {
   // Computed fields from backend
   plate?: string;
   duration_minutes?: number;
+  extension_count?: number; // Thêm field này
 }
 
 interface ReservationDetail {
@@ -106,6 +107,7 @@ interface ReservationDetail {
   cancelled_at?: string;
   plate?: string;
   duration_minutes?: number;
+  extension_count?: number; // Thêm field này
   slot: Slot;
   reservation_request?: ReservationRequest;
   user_snapshot: UserSnapshot;
@@ -176,6 +178,10 @@ export default function Reservations() {
   const [limit, setLimit] = useState(15);
   const [totalPages, setTotalPages] = useState(1);
   const [summary, setSummary] = useState<any>(null);
+  const [extensionPolicy, setExtensionPolicy] = useState<any>(null);
+  // Extension policies cache
+  const [extensionPolicies, setExtensionPolicies] = useState<Map<number, any>>(new Map());
+  const [peakHours, setPeakHours] = useState<any[]>([]);
 
   // Filters
   const [search, setSearch] = useState('');
@@ -257,6 +263,28 @@ export default function Reservations() {
       setReservations(data.data.reservations || []);
       setSummary(data.data.summary || null);
 
+      const parkingLotIds = new Set<number>();
+      (data.data.reservations || []).forEach((res: Reservation) => {
+        if (res.slot?.parking_lot?.id) {
+          parkingLotIds.add(res.slot.parking_lot.id);
+        }
+      });
+
+      const policiesMap = new Map<number, any>();
+      await Promise.all(
+        Array.from(parkingLotIds).map(async (lotId) => {
+          try {
+            const res = await reservationApi.get(`/extension-policies/parking-lot/${lotId}`);
+            if (res.data.success) {
+              policiesMap.set(lotId, res.data.data);
+            }
+          } catch (err) {
+            console.log(err);
+          }
+        }),
+      );
+      setExtensionPolicies(policiesMap);
+
       const pagination = data.data.pagination;
       setTotalPages(pagination.last_page || Math.max(1, Math.ceil(pagination.total / pagination.per_page)));
     } catch (err) {
@@ -274,6 +302,32 @@ export default function Reservations() {
       const data = res.data.data;
       setSelectedReservation(data);
       setOpenDetail(true);
+
+      // Fetch extension policy for the parking lot
+      if (data.slot?.parking_lot_id) {
+        try {
+          const policyRes = await reservationApi.get(`/extension-policies/parking-lot/${data.slot.parking_lot_id}`);
+          if (policyRes.data.success) {
+            setExtensionPolicy(policyRes.data.data);
+          } else {
+            setExtensionPolicy(null);
+          }
+        } catch (err) {
+          console.error('fetchExtensionPolicy error', err);
+          setExtensionPolicy(null);
+        }
+
+        // Fetch peak hours
+        try {
+          const peakRes = await reservationApi.get(`/parking-lots/${data.slot.parking_lot_id}/peak-hours`);
+          if (peakRes.data.success) {
+            setPeakHours(peakRes.data.peak_hours || []);
+          }
+        } catch (err) {
+          console.error('fetchPeakHours error', err);
+          setPeakHours([]);
+        }
+      }
     } catch (err) {
       console.error('fetchReservationDetail error', err);
       alert('Lỗi khi tải chi tiết đặt chỗ');
@@ -468,6 +522,34 @@ export default function Reservations() {
     return hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
   };
 
+  const canExtend = (reservation: Reservation): boolean => {
+    if (reservation.status !== 'confirmed') return false;
+    if (reservation.expires_at && new Date(reservation.expires_at) <= new Date()) return false;
+
+    // Fallback: hiển thị nút nếu không có đủ thông tin
+    const lotId = reservation.slot?.parking_lot?.id;
+    if (!lotId) {
+      console.log('No parking lot ID for reservation:', reservation.id);
+      return true;
+    }
+
+    const policy = extensionPolicies.get(lotId);
+    if (!policy) {
+      console.log('No policy for lot:', lotId);
+      return true; // Hiển thị để backend validate
+    }
+
+    if (!policy.value?.is_active) return false;
+
+    const currentCount = reservation.extension_count || 0;
+    const maxCount = policy.value.max_extensions || 0;
+    const canExtendResult = currentCount < maxCount;
+
+    console.log('Can extend check:', { lotId, currentCount, maxCount, canExtendResult });
+
+    return canExtendResult;
+  };
+
   const calculateDurationMinutes = (startTime: string, endTime: string): number => {
     if (!startTime || !endTime) return 0;
     const start = new Date(startTime);
@@ -475,27 +557,108 @@ export default function Reservations() {
     return Math.floor((end.getTime() - start.getTime()) / (1000 * 60));
   };
 
-  const calculatePrice = (pricing: PricingSnapshot, durationMinutes: number) => {
+  const calculatePrice = (pricing: PricingSnapshot, durationMinutes: number, startTime?: string, peakHours?: any[]) => {
     if (!pricing || !durationMinutes) return 0;
 
     // Lấy giá từ value object hoặc từ pricing trực tiếp
     const hourlyRate = pricing.value?.hourly || pricing.hourly || pricing.base_price_per_hour || 0;
     const peakMultiplier =
       pricing.value?.peak_multiplier || pricing.peak_multiplier || pricing.peak_hour_multiplier || 1;
+    const peakEnabled = pricing.value?.peak_enabled ?? pricing.peak_enabled ?? false;
 
     const hours = durationMinutes / 60;
     const basePrice = hourlyRate * hours;
-    const totalPrice = basePrice * peakMultiplier;
 
+    // Chỉ áp dụng peak multiplier nếu:
+    // 1. Peak enabled = true
+    // 2. Có startTime và peakHours để kiểm tra
+    // 3. startTime nằm trong giờ cao điểm
+    let finalMultiplier = 1;
+
+    if (peakEnabled && startTime && peakHours && peakHours.length > 0) {
+      const start = new Date(startTime);
+      const dayOfWeek = start.getDay(); // 0 = Chủ nhật, 1 = Thứ 2, ..., 6 = Thứ 7
+      const timeStr = start.toLocaleTimeString('en-US', {
+        hour12: false,
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+      });
+
+      // Kiểm tra xem có peak hour nào match không
+      const isInPeakHour = peakHours.some((peak: any) => {
+        if (!peak.is_active) return false;
+        if (peak.day_of_week !== dayOfWeek) return false;
+
+        const peakStart = peak.start_time; // Format: "HH:mm:ss"
+        const peakEnd = peak.end_time;
+
+        return timeStr >= peakStart && timeStr < peakEnd;
+      });
+
+      if (isInPeakHour) {
+        finalMultiplier = peakMultiplier;
+      }
+    }
+
+    const totalPrice = basePrice * finalMultiplier;
     return Math.round(totalPrice);
   };
 
   const handleExtendReservation = async (id: number) => {
     try {
+      // Get reservation detail first to check extension policy
+      const detailRes = await reservationApi.get(`/reservations/${id}`);
+      const reservation = detailRes.data.data;
+
+      if (reservation.slot?.parking_lot_id) {
+        // Fetch extension policy
+        try {
+          const policyRes = await reservationApi.get(
+            `/extension-policies/parking-lot/${reservation.slot.parking_lot_id}`,
+          );
+
+          if (policyRes.data.success) {
+            const policy = policyRes.data.data;
+            const currentExtensions = reservation.extension_count || 0;
+            const maxExtensions = policy.value?.max_extensions || 0;
+            const extensionMinutes = policy.value?.extension_minutes || 15;
+            const isActive = policy.value?.is_active === true;
+
+            if (!isActive) {
+              alert('Chính sách gia hạn chưa được kích hoạt');
+              return;
+            }
+
+            if (currentExtensions >= maxExtensions) {
+              alert(`Bạn đã đạt giới hạn số lần gia hạn (${maxExtensions} lần)`);
+              return;
+            }
+
+            // Show confirmation with policy info
+            const confirmMessage =
+              `Gia hạn đặt chỗ thêm ${extensionMinutes} phút?\n` +
+              `Số lần đã gia hạn: ${currentExtensions}/${maxExtensions}`;
+
+            if (!confirm(confirmMessage)) {
+              return;
+            }
+          }
+        } catch (err) {
+          console.error('Error fetching extension policy:', err);
+          // Continue with extension if policy fetch fails (for backward compatibility)
+        }
+      }
+
       const res = await reservationApi.put(`/reservations/${id}/extend`);
       if (res.data.success) {
-        alert('Gia hạn đặt chỗ thành công!');
+        const extendMinutes = res.data.data?.extended_minutes || 15;
+        alert(`Gia hạn đặt chỗ thành công! Thêm ${extendMinutes} phút.`);
         fetchReservations(); // Refresh danh sách
+        // Refresh detail if dialog is open
+        if (selectedReservation && selectedReservation.id === id) {
+          fetchReservationDetail(id);
+        }
       } else {
         alert(res.data.message || 'Không thể gia hạn đặt chỗ');
       }
@@ -538,6 +701,53 @@ export default function Reservations() {
       const errorMessage = err.response?.data?.message || 'Không thể check-in';
       alert(errorMessage);
     }
+  };
+
+  const handleCheckInAll = async () => {
+    const confirmedReservations = reservations.filter((r) => r.status === 'confirmed');
+
+    if (confirmedReservations.length === 0) {
+      alert('Không có đặt chỗ nào đang ở trạng thái "Đã xác nhận" để check-in');
+      return;
+    }
+
+    const confirmMessage = `Bạn có chắc muốn check-in tất cả ${confirmedReservations.length} đặt chỗ đã xác nhận?`;
+    if (!confirm(confirmMessage)) {
+      return;
+    }
+
+    let successCount = 0;
+    let failCount = 0;
+    const errors: string[] = [];
+
+    for (const reservation of confirmedReservations) {
+      try {
+        const res = await reservationApi.put(`/reservations/${reservation.id}/check-in`);
+        if (res.data.success) {
+          successCount++;
+        } else {
+          failCount++;
+          errors.push(`${reservation.reservation_code}: ${res.data.message || 'Không thể check-in'}`);
+        }
+      } catch (err: any) {
+        failCount++;
+        const errorMessage = err.response?.data?.message || 'Không thể check-in';
+        errors.push(`${reservation.reservation_code}: ${errorMessage}`);
+      }
+    }
+
+    let resultMessage = `Đã check-in thành công ${successCount} đặt chỗ`;
+    if (failCount > 0) {
+      resultMessage += `\nThất bại: ${failCount} đặt chỗ`;
+      if (errors.length > 0) {
+        resultMessage += '\n\nChi tiết lỗi:\n' + errors.slice(0, 5).join('\n');
+        if (errors.length > 5) {
+          resultMessage += `\n... và ${errors.length - 5} lỗi khác`;
+        }
+      }
+    }
+    alert(resultMessage);
+    fetchReservations();
   };
 
   const handleCheckOut = async (id: number) => {
@@ -688,6 +898,14 @@ export default function Reservations() {
                 <SelectItem value="50">50 / trang</SelectItem>
               </SelectContent>
             </Select>
+
+            <Button
+              variant="outline"
+              onClick={handleCheckInAll}
+              disabled={!reservations.some((r) => r.status === 'confirmed')}
+            >
+              Check-in ({reservations.filter((r) => r.status === 'confirmed').length})
+            </Button>
           </div>
         </CardHeader>
 
@@ -765,7 +983,7 @@ export default function Reservations() {
                           <TableCell>
                             <div className="flex items-center gap-1">
                               {/* Gia hạn - chỉ hiện khi confirmed và chưa gia hạn */}
-                              {reservation.status === 'confirmed' && !reservation.extended_at && (
+                              {canExtend(reservation) && (
                                 <Button
                                   size="sm"
                                   variant="outline"
@@ -994,10 +1212,11 @@ export default function Reservations() {
                 onValueChange={(v) => setNewReservation({ ...newReservation, algorithm: v as any })}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Chọn thuật toán" />
+                  <SelectValue placeholder="Chọn thuật toánlap" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="priority_queue">Priority Queue</SelectItem>
+                  <SelectItem value="priority_queue">Priority Queue (Hàng đợi ưu tiên)</SelectItem>
+                  <SelectItem value="hungarian">Hungarian Algorithm (Thuật toán Hungarian)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -1215,10 +1434,46 @@ export default function Reservations() {
                             selectedReservation.pricing_snapshot,
                             selectedReservation.duration_minutes ||
                               calculateDurationMinutes(selectedReservation.start_time, selectedReservation.end_time),
+                            selectedReservation.start_time, // Thêm startTime
+                            peakHours, // Thêm peakHours
                           ).toLocaleString()}{' '}
                           VNĐ
                         </div>
                       </div>
+                    </div>
+                  </div>
+                </>
+              )}
+              {/* Extension Policy Info in Detail Dialog */}
+              {extensionPolicy && extensionPolicy.value?.is_active && (
+                <>
+                  <Separator />
+                  <div>
+                    <h4 className="text-lg font-medium mb-3">Chính sách gia hạn</h4>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <Label className="text-sm font-medium">Trạng thái</Label>
+                        <div className="text-sm">
+                          <Badge className="bg-green-50 text-green-700 border-green-200">Đã kích hoạt</Badge>
+                        </div>
+                      </div>
+                      <div>
+                        <Label className="text-sm font-medium">Số phút gia hạn</Label>
+                        <div className="text-sm">{extensionPolicy.value.extension_minutes || 15} phút</div>
+                      </div>
+                      <div>
+                        <Label className="text-sm font-medium">Số lần gia hạn tối đa</Label>
+                        <div className="text-sm">{extensionPolicy.value.max_extensions || 1} lần</div>
+                      </div>
+                      {selectedReservation && (
+                        <div>
+                          <Label className="text-sm font-medium">Số lần đã gia hạn</Label>
+                          <div className="text-sm">
+                            {(selectedReservation as any).extension_count || 0} /{' '}
+                            {extensionPolicy.value.max_extensions || 1}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </>

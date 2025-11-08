@@ -5,7 +5,6 @@ import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
 import { useState, useEffect } from 'react';
 import { reservationApi } from '@/config/axios';
-import { Save, Clock, Hash, FileText, ToggleLeft } from 'lucide-react';
 
 // ==== Kiểu dữ liệu ====
 interface ExtensionPolicy {
@@ -84,10 +83,7 @@ export default function ExtensionPolicy({ selectedLotId }: ExtensionPolicyProps)
     return (
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <ToggleLeft className="h-5 w-5" />
-            Chính sách gia hạn
-          </CardTitle>
+          <CardTitle>Chính sách gia hạn</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="text-center py-8 text-muted-foreground">
@@ -102,10 +98,7 @@ export default function ExtensionPolicy({ selectedLotId }: ExtensionPolicyProps)
     return (
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <ToggleLeft className="h-5 w-5" />
-            Chính sách gia hạn
-          </CardTitle>
+          <CardTitle>Chính sách gia hạn</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="text-center py-8 text-muted-foreground">Chưa có chính sách gia hạn cho bãi đỗ này</div>
@@ -117,10 +110,7 @@ export default function ExtensionPolicy({ selectedLotId }: ExtensionPolicyProps)
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <ToggleLeft className="h-5 w-5" />
-          Chính sách gia hạn
-        </CardTitle>
+        <CardTitle>Chính sách gia hạn</CardTitle>
         <p className="text-sm text-muted-foreground">Cấu hình số lần gia hạn và thời gian gia hạn cho bãi đỗ xe</p>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -128,10 +118,7 @@ export default function ExtensionPolicy({ selectedLotId }: ExtensionPolicyProps)
         <div className="grid gap-6 md:grid-cols-2">
           {/* Max Extensions */}
           <div className="space-y-3">
-            <Label className="text-sm font-medium flex items-center gap-2">
-              <Hash className="h-4 w-4" />
-              Số lần gia hạn tối đa
-            </Label>
+            <Label className="text-sm font-medium">Số lần gia hạn tối đa</Label>
             <Input
               type="number"
               min={0}
@@ -147,10 +134,7 @@ export default function ExtensionPolicy({ selectedLotId }: ExtensionPolicyProps)
 
           {/* Extension Minutes */}
           <div className="space-y-3">
-            <Label className="text-sm font-medium flex items-center gap-2">
-              <Clock className="h-4 w-4" />
-              Thời gian gia hạn (phút)
-            </Label>
+            <Label className="text-sm font-medium">Thời gian gia hạn (phút)</Label>
             <Input
               type="number"
               min={1}
@@ -167,10 +151,7 @@ export default function ExtensionPolicy({ selectedLotId }: ExtensionPolicyProps)
 
         {/* Description */}
         <div className="space-y-3">
-          <Label className="text-sm font-medium flex items-center gap-2">
-            <FileText className="h-4 w-4" />
-            Mô tả chính sách
-          </Label>
+          <Label className="text-sm font-medium">Mô tả chính sách</Label>
           <Input
             type="text"
             value={extensionForm.description || ''}
@@ -194,7 +175,6 @@ export default function ExtensionPolicy({ selectedLotId }: ExtensionPolicyProps)
 
         {/* Action Buttons */}
         <Button onClick={updateExtensionPolicy} disabled={loading} className="w-full h-11">
-          <Save className="h-4 w-4 mr-2" />
           {loading ? 'Đang lưu...' : 'Lưu thay đổi'}
         </Button>
       </CardContent>
