@@ -120,8 +120,10 @@ export default function ParkingLots() {
 
     return () => {
       if (reconnectTimer) clearTimeout(reconnectTimer);
-      if (sseRef.current) sseRef.current.close();
-      sseRef.current = null;
+      if (sseRef.current) {
+        sseRef.current.close();
+        sseRef.current = null;
+      }
     };
   }, [selectedLot?.id]);
 

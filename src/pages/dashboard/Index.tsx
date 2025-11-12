@@ -3,6 +3,7 @@ import { reservationApi } from '@/config/axios';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import QRScanner from '@/components/QRScanner';
 
 interface VehicleTypeStats {
   total: number;
@@ -93,6 +94,7 @@ export default function ParkingLotStats() {
           )}
         </CardContent>
       </Card>
+      <QRScanner />
     </div>
   );
 }
