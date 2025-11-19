@@ -13,7 +13,7 @@ import {
   SidebarRail,
   SidebarSeparator,
 } from '@/components/ui/sidebar';
-import { Home, LayoutDashboard, Settings, Users, FileText, Car, Calendar, Ticket, AlertTriangle } from 'lucide-react';
+import { Home, LayoutDashboard, Settings, Users, FileText, Car, Ticket } from 'lucide-react';
 
 export default function Sidebar() {
   return (
@@ -64,25 +64,9 @@ export default function Sidebar() {
               </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild>
-                  <NavLink to="/dashboard/reservations" className="flex items-center gap-2">
-                    <Calendar className="shrink-0" />
-                    <span>Quản lý đặt chỗ</span>
-                  </NavLink>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild>
                   <NavLink to="/dashboard/monthly-passes" className="flex items-center gap-2">
                     <Ticket className="shrink-0" />
                     <span>Vé tháng</span>
-                  </NavLink>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild>
-                  <NavLink to="/dashboard/violations" className="flex items-center gap-2">
-                    <AlertTriangle className="shrink-0" />
-                    <span>Vi phạm</span>
                   </NavLink>
                 </SidebarMenuButton>
               </SidebarMenuItem>

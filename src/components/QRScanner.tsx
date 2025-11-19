@@ -93,8 +93,8 @@ export default function QRAdminScanner() {
   };
 
   return (
-    <div className="container mx-auto py-6 max-w-4xl">
-      <Card>
+    <div className="w-full max-w-2xl mx-auto">
+      <Card className="w-full">
         <CardHeader>
           <div className="flex items-center gap-3">
             <div className="p-2 bg-primary/10 rounded-lg">
@@ -108,9 +108,31 @@ export default function QRAdminScanner() {
             </div>
           </div>
         </CardHeader>
-        <CardContent className="space-y-6">
+        <CardContent className="space-y-4">
+          {message && (
+            <div
+              className={`p-3 sm:p-4 rounded-lg flex items-start gap-3 ${
+                message.includes('thành công')
+                  ? 'bg-green-50 text-green-800 dark:bg-green-900/20 dark:text-green-400 border border-green-200 dark:border-green-800'
+                  : message.includes('Lỗi')
+                    ? 'bg-red-50 text-red-800 dark:bg-red-900/20 dark:text-red-400 border border-red-200 dark:border-red-800'
+                    : 'bg-blue-50 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400 border border-blue-200 dark:border-blue-800'
+              }`}
+            >
+              {isProcessing ? (
+                <Loader2 className="h-5 w-5 animate-spin shrink-0 mt-0.5" />
+              ) : message.includes('thành công') ? (
+                <CheckCircle2 className="h-5 w-5 shrink-0 mt-0.5" />
+              ) : message.includes('Lỗi') ? (
+                <XCircle className="h-5 w-5 shrink-0 mt-0.5" />
+              ) : (
+                <Camera className="h-5 w-5 shrink-0 mt-0.5" />
+              )}
+              <p className="text-sm flex-1">{message}</p>
+            </div>
+          )}
           {/* Vùng quét QR */}
-          <div className="relative w-full max-w-md mx-auto">
+          <div className="relative w-full max-w-[220px] sm:max-w-xs mx-auto">
             <div
               className="relative w-full aspect-square overflow-hidden rounded-xl border-4 shadow-lg"
               style={{ borderColor: 'hsl(var(--primary))' }}
@@ -137,7 +159,7 @@ export default function QRAdminScanner() {
 
               {/* Overlay với hướng dẫn khi đang quét */}
               {isScanning && typeScan && (
-                <div className="absolute inset-0 pointer-events-none flex flex-col justify-end items-center p-6 bg-gradient-to-t from-black/70 via-transparent to-transparent">
+                <div className="absolute inset-0 pointer-events-none flex flex-col justify-end items-center p-3 sm:p-5 bg-gradient-to-t from-black/70 via-transparent to-transparent">
                   <div className="text-center space-y-2">
                     <div className="w-48 h-48 border-2 border-white/30 rounded-lg mx-auto mb-4" />
                     <p className="text-white font-medium text-sm">
@@ -175,38 +197,21 @@ export default function QRAdminScanner() {
             </Card>
           )}
 
-          {/* Hiển thị thông báo */}
-          {message && (
-            <div
-              className={`p-4 rounded-lg flex items-start gap-3 ${
-                message.includes('thành công')
-                  ? 'bg-green-50 text-green-800 dark:bg-green-900/20 dark:text-green-400 border border-green-200 dark:border-green-800'
-                  : message.includes('Lỗi')
-                    ? 'bg-red-50 text-red-800 dark:bg-red-900/20 dark:text-red-400 border border-red-200 dark:border-red-800'
-                    : 'bg-blue-50 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400 border border-blue-200 dark:border-blue-800'
-              }`}
-            >
-              {isProcessing ? (
-                <Loader2 className="h-5 w-5 animate-spin shrink-0 mt-0.5" />
-              ) : message.includes('thành công') ? (
-                <CheckCircle2 className="h-5 w-5 shrink-0 mt-0.5" />
-              ) : message.includes('Lỗi') ? (
-                <XCircle className="h-5 w-5 shrink-0 mt-0.5" />
-              ) : (
-                <Camera className="h-5 w-5 shrink-0 mt-0.5" />
-              )}
-              <p className="text-sm flex-1">{message}</p>
-            </div>
-          )}
 
           {/* Nút chọn chế độ quét */}
           {!typeScan && !isScanning && (
-            <div className="flex gap-4 justify-center">
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Button onClick={handleStartCheckIn} disabled={isProcessing} size="lg" className="flex-1 max-w-xs">
                 <LogIn className="h-5 w-5 mr-2" />
                 Quét Check-in
               </Button>
-              <Button onClick={handleStartCheckOut} disabled={isProcessing} size="lg" variant="outline" className="flex-1 max-w-xs">
+              <Button
+                onClick={handleStartCheckOut}
+                disabled={isProcessing}
+                size="lg"
+                variant="outline"
+                className="flex-1 max-w-xs"
+              >
                 <LogOut className="h-5 w-5 mr-2" />
                 Quét Check-out
               </Button>

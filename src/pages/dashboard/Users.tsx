@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Search, Plus } from 'lucide-react';
+import { Search, Plus, RefreshCw } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -9,17 +9,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { authApi } from '@/config/axios';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { getUserViolations } from '@/services/violationApi';
-import type { Violation } from '@/types/violation';
 
 interface User {
   id: number;
   name: string;
   email: string;
   phone: string;
-  is_active: string;
+  role?: string;
+  is_active: boolean;
   created_at: string;
   deleted_at?: string | null;
 }
@@ -36,11 +34,11 @@ export default function Users() {
   const [Users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
-  const [limit, setLimit] = useState(10);
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [totalPages, setTotalPages] = useState(1);
   const [trashed, setTrashed] = useState<string>('without');
+  const perPage = 10;
 
   // --- Create dialog state ---
   const [openCreate, setOpenCreate] = useState(false);
@@ -56,31 +54,25 @@ export default function Users() {
   const [openDetail, setOpenDetail] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
-  const [editMode, setEditMode] = useState(false);
   const [editPayload, setEditPayload] = useState({
     name: '',
     email: '',
     phone: '',
     role: 'resident',
   });
+  const roleOptions = [
+    { label: 'Quản trị viên', value: 'admin' },
+    { label: 'Nhân viên', value: 'staff' },
+    { label: 'Cư dân', value: 'resident' },
+  ];
 
   // --- Vehicles under detail (separate API) ---
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [vehPage, setVehPage] = useState(1);
-  const [vehLimit, setVehLimit] = useState(5);
+  const vehLimit = 5; // Fixed limit for vehicles in detail modal
   const [vehTotalPages, setVehTotalPages] = useState(1);
   const [vehLoading, setVehLoading] = useState(false);
   const [vehIsActiveFilter, setVehIsActiveFilter] = useState<string>('all');
-
-  // --- Violations under detail ---
-  const [violations, setViolations] = useState<Violation[]>([]);
-  const [violationsLoading, setViolationsLoading] = useState(false);
-  const [violationsSummary, setViolationsSummary] = useState<{
-    total_violations: number;
-    pending_count: number;
-    resolved_count: number;
-    total_fines: number;
-  } | null>(null);
 
   // Debounce search input
   useEffect(() => {
@@ -91,17 +83,17 @@ export default function Users() {
   // Reset page when filters change
   useEffect(() => {
     setPage(1);
-  }, [debouncedSearch, limit]);
+  }, [debouncedSearch]);
 
-  // Fetch list when page/limit/search/status change
+  // Fetch list when page/search/status change
   useEffect(() => {
     fetchUsers();
-  }, [page, limit, debouncedSearch, trashed]);
+  }, [page, debouncedSearch, trashed]);
 
   const fetchUsers = async () => {
     try {
       setLoading(true);
-      const params: any = { page, limit, trashed };
+      const params: any = { page, limit: perPage, trashed };
       if (debouncedSearch) params.search = debouncedSearch;
 
       const res = await authApi.get('/users', {
@@ -111,7 +103,7 @@ export default function Users() {
       const data = res.data.data || [];
       setUsers(data);
       const total = res.data.pagination?.total || res.data.total || data.length;
-      setTotalPages(Math.max(1, Math.ceil(total / limit)));
+      setTotalPages(Math.max(1, Math.ceil(total / perPage)));
     } catch (err) {
       console.error('fetchUsers error', err);
       // optionally show toast
@@ -153,10 +145,6 @@ export default function Users() {
         role: (d as any).role || 'resident',
       });
       setOpenDetail(true);
-      // also fetch vehicles separately
-      fetchVehiclesForUser(id, 1, vehLimit, vehIsActiveFilter);
-      // fetch violations
-      fetchUserViolations(id);
     } catch (err) {
       console.error('fetchUserDetail', err);
       alert('Không thể tải chi tiết người dùng');
@@ -187,22 +175,6 @@ export default function Users() {
     }
   };
 
-  // --- Violations for user (Yêu cầu đề tài: Quản lý cư dân - lịch sử vi phạm) ---
-  const fetchUserViolations = async (userId: number) => {
-    try {
-      setViolationsLoading(true);
-      const res = await getUserViolations(userId, { per_page: 20 });
-      setViolations(res.data || []);
-      setViolationsSummary(res.summary || null);
-    } catch (err) {
-      console.error('fetchUserViolations', err);
-      setViolations([]);
-      setViolationsSummary(null);
-    } finally {
-      setViolationsLoading(false);
-    }
-  };
-
   // --- Update User (PATCH) ---
   const handleUpdateUser = async () => {
     if (!selectedUser) return;
@@ -212,7 +184,6 @@ export default function Users() {
       // reload detail + list
       await fetchUserDetail(selectedUser.id);
       fetchUsers();
-      setEditMode(false);
     } catch (err: any) {
       console.error('update User', err);
       alert(err.response?.data?.message || 'Không thể cập nhật');
@@ -220,13 +191,15 @@ export default function Users() {
   };
 
   // --- Delete User (soft delete) ---
-  const handleDeleteUser = async () => {
-    if (!selectedUser) return;
+  const performDeleteUser = async (id: number) => {
     if (!confirm('Bạn có chắc muốn xóa (xóa mềm) người dùng này?')) return;
     try {
-      await authApi.delete(`/users/${selectedUser.id}`, {});
+      await authApi.delete(`/users/${id}`, {});
       alert('Đã xóa (xóa mềm)');
+      if (selectedUser?.id === id) {
       setOpenDetail(false);
+        setSelectedUser(null);
+      }
       fetchUsers();
     } catch (err) {
       console.error('delete User', err);
@@ -244,6 +217,35 @@ export default function Users() {
     } catch (err) {
       console.error('restore from list', err);
       alert('Không thể khôi phục người dùng');
+    }
+  };
+
+  const handleToggleUserActive = async (user: User) => {
+    const nextState = !user.is_active;
+    if (
+      !confirm(nextState ? 'Mở khóa tài khoản này?' : 'Khóa tài khoản này? Người dùng sẽ không thể đăng nhập.')
+    )
+      return;
+    try {
+      await authApi.patch(`/users/${user.id}`, {
+        is_active: nextState,
+      });
+      alert(nextState ? 'Đã mở khóa tài khoản' : 'Đã khóa tài khoản');
+      if (selectedUser?.id === user.id) {
+        await fetchUserDetail(user.id);
+      } else {
+        fetchUsers();
+      }
+    } catch (err: any) {
+      console.error('toggle active error', err);
+      alert(err.response?.data?.message || 'Không thể cập nhật trạng thái');
+    }
+  };
+
+  const handleRefreshAll = () => {
+    fetchUsers();
+    if (selectedUser) {
+      fetchUserDetail(selectedUser.id);
     }
   };
 
@@ -284,6 +286,21 @@ export default function Users() {
                   <Label>Số điện thoại</Label>
                   <Input value={newUser.phone} onChange={(e) => setNewUser({ ...newUser, phone: e.target.value })} />
                 </div>
+                <div>
+                  <Label>Vai trò</Label>
+                  <Select value={newUser.role} onValueChange={(v) => setNewUser({ ...newUser, role: v })}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Chọn vai trò" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {roleOptions.map((r) => (
+                        <SelectItem key={r.value} value={r.value}>
+                          {r.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
 
                 <div>
                   <Label>Mật khẩu</Label>
@@ -303,37 +320,44 @@ export default function Users() {
         </div>
 
         {/* Filters */}
-        <div className="flex gap-3 flex-wrap items-center">
-          <div className="relative flex-1 min-w-[250px]">
+        <div className="w-full space-y-3 rounded-xl border bg-muted/20 p-4">
+          <div className="text-sm font-medium text-muted-foreground">Bộ lọc tìm kiếm</div>
+          <div className="flex flex-wrap gap-3 items-end">
+            <div className="flex flex-col gap-1 flex-1 min-w-[250px]">
+              <Label className="text-sm text-muted-foreground">Từ khóa</Label>
+              <div className="relative">
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Tìm tên, email, sđt..."
+                  placeholder="Nhập tên, email hoặc số điện thoại..."
               className="pl-8"
             />
             <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+              </div>
           </div>
 
+            <div className="flex flex-col gap-1">
+              <Label className="text-sm text-muted-foreground">Tình trạng tài khoản</Label>
           <Select value={trashed} onValueChange={setTrashed}>
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="Trạng thái xóa" />
+                <SelectTrigger className="w-[220px]">
+                  <SelectValue placeholder="Tình trạng tài khoản" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="without">Chưa xóa</SelectItem>
-              <SelectItem value="only">Đã xóa mềm</SelectItem>
-              <SelectItem value="with">Tất cả</SelectItem>
+                  <SelectItem value="without">Đang hoạt động</SelectItem>
+                  <SelectItem value="only">Đã bị xóa</SelectItem>
+                  <SelectItem value="with">Bao gồm tất cả</SelectItem>
             </SelectContent>
           </Select>
+            </div>
 
-          <Select value={limit.toString()} onValueChange={(v) => setLimit(Number(v))}>
-            <SelectTrigger className="w-[120px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="2">2 / trang</SelectItem>
-              <SelectItem value="10">10 / trang</SelectItem>
-            </SelectContent>
-          </Select>
+            <div className="flex flex-col gap-1">
+              <Label className="text-sm text-muted-foreground"> </Label>
+              <Button variant="outline" onClick={handleRefreshAll} className="flex items-center gap-2">
+                <RefreshCw className="h-4 w-4" />
+                Làm mới
+              </Button>
+            </div>
+          </div>
         </div>
       </CardHeader>
 
@@ -357,28 +381,45 @@ export default function Users() {
                     <TableHead>Họ tên</TableHead>
                     <TableHead>Email</TableHead>
                     <TableHead>Điện thoại</TableHead>
+                    <TableHead>Vai trò</TableHead>
                     <TableHead>Ngày tạo</TableHead>
                     <TableHead>Trạng thái</TableHead>
-                    <TableHead></TableHead>
+                    <TableHead className="text-right">Hành động</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {pagedData.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center text-muted-foreground">
+                      <TableCell colSpan={7} className="text-center text-muted-foreground">
                         Không tìm thấy người dùng
                       </TableCell>
                     </TableRow>
                   ) : (
                     pagedData.map((r) => (
-                      <TableRow
-                        key={r.id}
-                        className="cursor-pointer hover:bg-muted/50 transition"
-                        onClick={() => fetchUserDetail(r.id)}
-                      >
+                      <TableRow key={r.id} className="hover:bg-muted/50 transition">
                         <TableCell className="font-medium">{r.name}</TableCell>
                         <TableCell>{r.email}</TableCell>
                         <TableCell>{r.phone}</TableCell>
+                        <TableCell>
+                          <Badge
+                            variant="outline"
+                            className={
+                              r.role === 'admin'
+                                ? 'border-purple-200 text-purple-700 bg-purple-50'
+                                : r.role === 'staff'
+                                  ? 'border-blue-200 text-blue-700 bg-blue-50'
+                                  : 'border-gray-200 text-gray-700 bg-gray-50'
+                            }
+                          >
+                            {r.role === 'admin'
+                              ? 'Quản trị viên'
+                              : r.role === 'staff'
+                                ? 'Nhân viên'
+                                : r.role === 'resident'
+                                  ? 'Cư dân'
+                                  : '-'}
+                          </Badge>
+                        </TableCell>
                         <TableCell>{new Date(r.created_at).toLocaleDateString()}</TableCell>
                         <TableCell className="flex items-center gap-2">
                           {r.deleted_at ? (
@@ -395,9 +436,39 @@ export default function Users() {
                                 Khôi phục
                               </Button>
                             </>
-                          ) : (
+                          ) : r.is_active ? (
                             <Badge className="bg-green-50 text-green-700">Còn hoạt động</Badge>
+                          ) : (
+                            <Badge className="bg-yellow-50 text-yellow-700">Đã khóa</Badge>
                           )}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex justify-end gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => fetchUserDetail(r.id)}
+                            >
+                              Chi tiết
+                            </Button>
+                            {!r.deleted_at && (
+                              <Button
+                                size="sm"
+                                variant={r.is_active ? 'secondary' : 'default'}
+                                onClick={() => handleToggleUserActive(r)}
+                              >
+                                {r.is_active ? 'Khóa' : 'Mở khóa'}
+                              </Button>
+                            )}
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="text-red-600"
+                              onClick={() => performDeleteUser(r.id)}
+                            >
+                              Xóa
+                            </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))
@@ -443,7 +514,6 @@ export default function Users() {
           setOpenDetail(v);
           if (!v) {
             setSelectedUser(null);
-            setEditMode(false);
           }
         }}
       >
@@ -455,373 +525,99 @@ export default function Users() {
           {detailLoading ? (
             <div className="text-center py-10 text-muted-foreground">Đang tải...</div>
           ) : selectedUser ? (
-            <Tabs defaultValue="info" className="w-full">
-              <TabsList className="grid w-full grid-cols-3">
-                <TabsTrigger value="info">Thông tin</TabsTrigger>
-                <TabsTrigger value="vehicles">Phương tiện</TabsTrigger>
-                <TabsTrigger value="violations">
-                  Lịch sử vi phạm
-                  {violationsSummary && violationsSummary.total_violations > 0 && (
-                    <Badge variant="destructive" className="ml-2">
-                      {violationsSummary.total_violations}
-                    </Badge>
-                  )}
-                </TabsTrigger>
-              </TabsList>
-
-              <TabsContent value="info" className="space-y-4">
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                  <div>
-                    {/* Info / Edit form */}
-                    {!editMode ? (
+            <div className="space-y-6">
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <h3 className="text-sm font-medium text-muted-foreground">Thông tin cá nhân</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="space-y-2">
-                        <div>
-                          <strong>Họ tên:</strong> {selectedUser.name}
-                        </div>
-                        <div>
-                          <strong>Email:</strong> {selectedUser.email}
-                        </div>
-                        <div>
-                          <strong>Điện thoại:</strong> {selectedUser.phone}
-                        </div>
-                        <div>
-                          <strong>Ngày tạo:</strong> {new Date(selectedUser.created_at).toLocaleString()}
-                        </div>
-
-                        <div className="flex gap-2 mt-3">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => {
-                              setEditMode(true);
-                            }}
-                          >
-                            Sửa
-                          </Button>
-                          <Button size="sm" variant="destructive" onClick={handleDeleteUser}>
-                            Xóa
-                          </Button>
-                          <Button size="sm" onClick={() => fetchUserDetail(selectedUser.id)}>
-                            Làm mới
-                          </Button>
-                        </div>
-                      </div>
-                    ) : (
-                      // Edit form
-                      <div className="space-y-3">
-                        <div>
-                          <Label>Họ tên</Label>
+                        <Label htmlFor="name">Họ tên *</Label>
                           <Input
+                          id="name"
                             value={editPayload.name}
                             onChange={(e) => setEditPayload({ ...editPayload, name: e.target.value })}
+                          placeholder="Nhập họ và tên"
                           />
                         </div>
-                        <div>
-                          <Label>Email</Label>
+                      <div className="space-y-2">
+                        <Label htmlFor="email">Email *</Label>
                           <Input
+                          id="email"
+                          type="email"
                             value={editPayload.email}
                             onChange={(e) => setEditPayload({ ...editPayload, email: e.target.value })}
+                          placeholder="Nhập địa chỉ email"
                           />
                         </div>
-                        <div>
-                          <Label>Số điện thoại</Label>
+                      <div className="space-y-2">
+                        <Label htmlFor="phone">Số điện thoại</Label>
                           <Input
+                          id="phone"
                             value={editPayload.phone}
                             onChange={(e) => setEditPayload({ ...editPayload, phone: e.target.value })}
-                          />
-                        </div>
-
-                        <div className="flex gap-2">
-                          <Button onClick={handleUpdateUser}>Lưu</Button>
-                          <Button variant="outline" onClick={() => setEditMode(false)}>
-                            Hủy
-                          </Button>
-                        </div>
+                          placeholder="Nhập số điện thoại"
+                        />
                       </div>
-                    )}
-                  </div>
-                </div>
-              </TabsContent>
-
-              <TabsContent value="vehicles" className="space-y-4">
-                {/* Vehicles area */}
-                <div>
-                <div className="flex items-center justify-between">
-                  <h4 className="text-lg font-medium">Phương tiện</h4>
-                  <div className="flex items-center gap-2">
+                      <div className="space-y-2">
+                        <Label htmlFor="role">Vai trò</Label>
                     <Select
-                      value={vehIsActiveFilter}
-                      onValueChange={(v) => {
-                        setVehIsActiveFilter(v);
-                        if (selectedUser) fetchVehiclesForUser(selectedUser.id, 1, vehLimit, v);
-                      }}
-                    >
-                      <SelectTrigger className="w-[140px]">
-                        <SelectValue placeholder="Trạng thái" />
+                          value={editPayload.role}
+                          onValueChange={(v) => setEditPayload({ ...editPayload, role: v })}
+                        >
+                          <SelectTrigger id="role">
+                            <SelectValue placeholder="Chọn vai trò" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="all">Tất cả</SelectItem>
-                        <SelectItem value="true">Hoạt động</SelectItem>
-                        <SelectItem value="false">Ngừng</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <Select
-                      value={vehLimit.toString()}
-                      onValueChange={(v) => {
-                        setVehLimit(Number(v));
-                        if (selectedUser) fetchVehiclesForUser(selectedUser.id, 1, Number(v), vehIsActiveFilter);
-                      }}
-                    >
-                      <SelectTrigger className="w-[120px]">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="5">5 / trang</SelectItem>
-                        <SelectItem value="10">10 / trang</SelectItem>
-                        <SelectItem value="20">20 / trang</SelectItem>
+                            {roleOptions.map((r) => (
+                              <SelectItem key={r.value} value={r.value}>
+                                {r.label}
+                              </SelectItem>
+                            ))}
                       </SelectContent>
                     </Select>
                   </div>
-                </div>
-
-                {vehLoading ? (
-                  <div className="py-6 text-center text-muted-foreground">Đang tải phương tiện...</div>
-                ) : vehicles.length === 0 ? (
-                  <div className="py-6 text-center text-muted-foreground">Không có phương tiện</div>
-                ) : (
-                  <ScrollArea className="max-h-[50vh]">
-                    <Table className="mt-2">
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Biển số</TableHead>
-                          <TableHead>Loại</TableHead>
-                          <TableHead>Trạng thái</TableHead>
-                          <TableHead></TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {vehicles
-                          ?.slice() // sao chép mảng
-                          .sort((a, b) => {
-                            if (a.is_primary && !b.is_primary) return -1; // a là xe chính => lên đầu
-                            if (!a.is_primary && b.is_primary) return 1; // b là xe chính => lên đầu
-                            return 0; // giữ nguyên
-                          })
-                          .map((v) => (
-                            <TableRow key={v.id}>
-                              <TableCell>{v.license_plate}</TableCell>
-                              <TableCell>
-                                {v.vehicle_type === 'motorbike'
-                                  ? 'Xe máy'
-                                  : v.vehicle_type === 'car_4_seat'
-                                    ? 'Xe 4 chỗ'
-                                    : v.vehicle_type === 'car_7_seat'
-                                      ? 'Xe 7 chỗ'
-                                      : v.vehicle_type === 'light_truck'
-                                        ? 'Xe tải nhẹ'
-                                        : '-'}
-                              </TableCell>
-                              <TableCell>
-                                {v.is_active ? (
-                                  <Badge className="bg-green-50 text-green-700">Hoạt động</Badge>
-                                ) : (
-                                  <Badge className="bg-red-50 text-red-700">Ngừng</Badge>
-                                )}
-                              </TableCell>
-                              <TableCell>
-                                {v.is_primary ? <Badge className="bg-blue-50 text-blue-700">Xe chính</Badge> : ''}
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                      </TableBody>
-                    </Table>
-                  </ScrollArea>
-                )}
-
-                {/* Vehicles pagination */}
-                <div className="flex items-center justify-center gap-2 mt-3">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={vehPage === 1}
-                    onClick={() =>
-                      selectedUser &&
-                      fetchVehiclesForUser(selectedUser.id, Math.max(1, vehPage - 1), vehLimit, vehIsActiveFilter)
-                    }
-                  >
-                    ←
-                  </Button>
-                  {Array.from({ length: vehTotalPages }, (_, i) => i + 1).map((p) => (
-                    <Button
-                      key={p}
-                      variant={p === vehPage ? 'default' : 'outline'}
-                      size="sm"
-                      onClick={() =>
-                        selectedUser && fetchVehiclesForUser(selectedUser.id, p, vehLimit, vehIsActiveFilter)
-                      }
-                    >
-                      {p}
-                    </Button>
-                  ))}
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={vehPage === vehTotalPages}
-                    onClick={() =>
-                      selectedUser &&
-                      fetchVehiclesForUser(
-                        selectedUser.id,
-                        Math.min(vehTotalPages, vehPage + 1),
-                        vehLimit,
-                        vehIsActiveFilter,
-                      )
-                    }
-                  >
-                    →
-                  </Button>
                 </div>
               </div>
-              </TabsContent>
 
-              <TabsContent value="violations" className="space-y-4">
-                {/* Violations area - Yêu cầu đề tài: Quản lý cư dân - lịch sử vi phạm */}
-                <div>
-                  {violationsSummary && (
-                    <div className="grid grid-cols-4 gap-4 mb-4 p-4 bg-muted rounded-lg">
-                      <div>
-                        <div className="text-sm text-muted-foreground">Tổng vi phạm</div>
-                        <div className="text-2xl font-bold">{violationsSummary.total_violations}</div>
+                  <div className="border-t pt-4 space-y-2">
+                    <h3 className="text-sm font-medium text-muted-foreground">Thông tin hệ thống</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>Trạng thái tài khoản</Label>
+                        <Input
+                          value={selectedUser.is_active ? 'Đang hoạt động' : 'Đã bị khóa'}
+                          disabled
+                          readOnly
+                          className="bg-muted"
+                        />
                       </div>
-                      <div>
-                        <div className="text-sm text-muted-foreground">Chờ xử lý</div>
-                        <div className="text-2xl font-bold text-orange-600">{violationsSummary.pending_count}</div>
-                      </div>
-                      <div>
-                        <div className="text-sm text-muted-foreground">Đã xử lý</div>
-                        <div className="text-2xl font-bold text-green-600">{violationsSummary.resolved_count}</div>
-                      </div>
-                      <div>
-                        <div className="text-sm text-muted-foreground">Tổng tiền phạt</div>
-                        <div className="text-2xl font-bold text-red-600">
-                          {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(
-                            violationsSummary.total_fines || 0
-                          )}
-                        </div>
+                      <div className="space-y-2">
+                        <Label>Ngày tạo</Label>
+                        <Input
+                          value={new Date(selectedUser.created_at).toLocaleString('vi-VN', {
+                            dateStyle: 'long',
+                            timeStyle: 'short',
+                          })}
+                          disabled
+                          readOnly
+                          className="bg-muted"
+                        />
                       </div>
                     </div>
-                  )}
+                  </div>
 
-                  {violationsLoading ? (
-                    <div className="py-6 text-center text-muted-foreground">Đang tải lịch sử vi phạm...</div>
-                  ) : violations.length === 0 ? (
-                    <div className="py-6 text-center text-muted-foreground">Không có vi phạm nào</div>
-                  ) : (
-                    <ScrollArea className="max-h-[50vh]">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Ticket #</TableHead>
-                            <TableHead>Loại</TableHead>
-                            <TableHead>Mức độ</TableHead>
-                            <TableHead>Tiền phạt</TableHead>
-                            <TableHead>Trạng thái</TableHead>
-                            <TableHead>Thời gian</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {violations.map((v) => (
-                            <TableRow key={v.id}>
-                              <TableCell className="font-mono text-sm">{v.ticket_number || '-'}</TableCell>
-                              <TableCell>
-                                {v.type === 'OVERSTAY'
-                                  ? 'Đỗ quá giờ'
-                                  : v.type === 'LATE_CHECK_IN'
-                                    ? 'Check-in muộn'
-                                    : v.type === 'NO_SHOW'
-                                      ? 'Không đến'
-                                      : v.type === 'LATE_PAYMENT'
-                                        ? 'Thanh toán chậm'
-                                        : v.type === 'WRONG_SLOT'
-                                          ? 'Đỗ sai chỗ'
-                                          : v.type === 'NO_RESERVATION'
-                                            ? 'Đỗ không reservation'
-                                            : 'Khác'}
-                              </TableCell>
-                              <TableCell>
-                                <Badge
-                                  variant={
-                                    v.severity === 'CRITICAL'
-                                      ? 'destructive'
-                                      : v.severity === 'HIGH'
-                                        ? 'default'
-                                        : v.severity === 'MEDIUM'
-                                          ? 'secondary'
-                                          : 'outline'
-                                  }
-                                >
-                                  {v.severity === 'CRITICAL'
-                                    ? 'Nghiêm trọng'
-                                    : v.severity === 'HIGH'
-                                      ? 'Cao'
-                                      : v.severity === 'MEDIUM'
-                                        ? 'Trung bình'
-                                        : 'Thấp'}
-                                </Badge>
-                              </TableCell>
-                              <TableCell>
-                                {v.fine_amount
-                                  ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(
-                                      v.fine_amount
-                                    )
-                                  : '-'}
-                              </TableCell>
-                              <TableCell>
-                                <Badge
-                                  variant={
-                                    v.status === 'PENDING'
-                                      ? 'outline'
-                                      : v.status === 'RESOLVED'
-                                        ? 'default'
-                                        : v.status === 'CANCELLED'
-                                          ? 'secondary'
-                                          : 'destructive'
-                                  }
-                                >
-                                  {v.status === 'PENDING'
-                                    ? 'Chờ xử lý'
-                                    : v.status === 'RESOLVED'
-                                      ? 'Đã xử lý'
-                                      : v.status === 'CANCELLED'
-                                        ? 'Đã hủy'
-                                        : 'Đang khiếu nại'}
-                                </Badge>
-                              </TableCell>
-                              <TableCell className="text-sm">
-                                {v.violation_time
-                                  ? new Date(v.violation_time).toLocaleString('vi-VN', {
-                                      dateStyle: 'short',
-                                      timeStyle: 'short',
-                                    })
-                                  : '-'}
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </ScrollArea>
-                  )}
+                  <div className="flex justify-end gap-2 pt-4 border-t">
+                    <Button variant="outline" onClick={() => fetchUserDetail(selectedUser.id)}>
+                      Làm mới
+                    </Button>
+                    <Button onClick={handleUpdateUser}>Lưu thay đổi</Button>
+                  </div>
                 </div>
-              </TabsContent>
-            </Tabs>
+            </div>
           ) : (
             <div className="text-center py-8 text-muted-foreground">Không có dữ liệu</div>
           )}
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setOpenDetail(false)}>
-              Đóng
-            </Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
     </Card>

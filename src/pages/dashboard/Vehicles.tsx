@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Search, Plus } from 'lucide-react';
+import { Search, Plus, RefreshCw } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -24,6 +24,7 @@ interface Vehicle {
   user?: { id: number; name: string };
   is_active: boolean;
   is_primary?: boolean;
+  status?: 'pending' | 'approved' | 'rejected';
   created_at?: string;
   updated_at?: string;
   deleted_at?: string | null;
@@ -34,7 +35,7 @@ export default function Vehicles() {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
-  const [limit, setLimit] = useState(10);
+  const perPage = 10; // Fixed page size
   const [totalPages, setTotalPages] = useState(1);
 
   // filters
@@ -43,6 +44,7 @@ export default function Vehicles() {
   const [vehIsActiveFilter, setVehIsActiveFilter] = useState<string>('all');
   const [vehUserFilter, setVehUserFilter] = useState<string>('all');
   const [vehTypeFilter, setVehTypeFilter] = useState('all');
+  const [vehStatusFilter, setVehStatusFilter] = useState<string>('all');
 
   // users for select
   const [users, setUsers] = useState<User[]>([]);
@@ -58,6 +60,14 @@ export default function Vehicles() {
     is_active: true,
   });
 
+  // --- Detail dialog state ---
+  const [openDetail, setOpenDetail] = useState(false);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [editPayload, setEditPayload] = useState({
+    license_plate: '',
+    vehicle_type: 'motorbike',
+  });
+
   // debounce search
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(search), 400);
@@ -67,12 +77,12 @@ export default function Vehicles() {
   // reset page when filters change
   useEffect(() => {
     setPage(1);
-  }, [debouncedSearch, vehIsActiveFilter, vehUserFilter, vehTypeFilter, limit]);
+  }, [debouncedSearch, vehIsActiveFilter, vehUserFilter, vehTypeFilter, vehStatusFilter]);
 
   // fetch data
   useEffect(() => {
     fetchVehicles();
-  }, [page, limit, debouncedSearch, vehIsActiveFilter, vehUserFilter, vehTypeFilter]);
+  }, [page, debouncedSearch, vehIsActiveFilter, vehUserFilter, vehTypeFilter, vehStatusFilter]);
 
   useEffect(() => {
     fetchUsersForSelect();
@@ -81,18 +91,19 @@ export default function Vehicles() {
   const fetchVehicles = async () => {
     try {
       setLoading(true);
-      const params: any = { page, limit };
+      const params: any = { page, limit: perPage };
       if (debouncedSearch) params.search = debouncedSearch;
       if (vehIsActiveFilter !== 'all') params.is_active = vehIsActiveFilter === 'true';
       if (vehUserFilter !== 'all') params.user_id = vehUserFilter;
       if (vehTypeFilter !== 'all') params.vehicle_type = vehTypeFilter;
+      if (vehStatusFilter !== 'all') params.status = vehStatusFilter;
 
       const res = await authApi.get('/vehicles', { params });
       const data = res.data.data || [];
       setVehicles(data);
 
       const total = res.data.pagination?.total || res.data.total || data.length;
-      setTotalPages(Math.max(1, Math.ceil(total / limit)));
+      setTotalPages(Math.max(1, Math.ceil(total / perPage)));
     } catch (err) {
       console.error('fetchVehicles', err);
       alert('Lỗi khi tải danh sách phương tiện');
@@ -112,7 +123,7 @@ export default function Vehicles() {
 
   const openCreateForm = () => {
     setIsEditMode(false);
-    setFormPayload({ license_plate: '', user_id: '', vehicle_type: 'motorbike', is_active: true });
+    setFormPayload({ license_plate: '', user_id: '', vehicle_type: 'motorbike', is_active: false });
     setSelectedVehicle(null);
     setOpenForm(true);
   };
@@ -135,14 +146,17 @@ export default function Vehicles() {
         alert('Vui lòng nhập biển số');
         return;
       }
+      if (!formPayload.user_id) {
+        alert('Vui lòng chọn người dùng');
+        return;
+      }
       const payload = {
         license_plate: formPayload.license_plate,
-        user_id: formPayload.user_id || null,
+        user_id: formPayload.user_id,
         vehicle_type: formPayload.vehicle_type,
-        is_active: formPayload.is_active,
       };
       await authApi.post('/vehicles', payload);
-      alert('Tạo phương tiện thành công');
+      alert('Tạo phương tiện thành công. Phương tiện đang chờ admin duyệt.');
       setOpenForm(false);
       fetchVehicles();
     } catch (err: any) {
@@ -156,9 +170,7 @@ export default function Vehicles() {
     try {
       const payload = {
         license_plate: formPayload.license_plate,
-        user_id: formPayload.user_id || null,
         vehicle_type: formPayload.vehicle_type,
-        is_active: formPayload.is_active,
       };
       await authApi.patch(`/vehicles/${selectedVehicle.id}`, payload, {
         headers: {},
@@ -172,22 +184,15 @@ export default function Vehicles() {
     }
   };
 
-  const handleDeleteVehicle = async (v: Vehicle) => {
-    if (!confirm('Bạn có chắc muốn xóa phương tiện này?')) return;
-    try {
-      await authApi.delete(`/vehicles/${v.id}`);
-      alert('Đã xóa phương tiện');
-      fetchVehicles();
-    } catch (err) {
-      console.error('delete vehicle', err);
-      alert('Không thể xóa phương tiện');
-    }
-  };
 
   const handleToggleActive = async (v: Vehicle, e?: React.MouseEvent) => {
     e?.stopPropagation();
+    const action = v.is_active ? 'khóa' : 'mở khóa';
+    if (!confirm(`Xác nhận ${action} phương tiện này?`)) return;
+
     try {
       await authApi.post(`/vehicles/toggle-active/${v.id}`);
+      alert(`Đã ${action} phương tiện thành công`);
       fetchVehicles();
     } catch (err) {
       console.error('toggle active', err);
@@ -195,16 +200,79 @@ export default function Vehicles() {
     }
   };
 
-  const handleSetPrimary = async (id: number) => {
-    if (!confirm('Xác nhận đặt phương tiện này làm xe chính?')) return;
+  const handleReviewVehicle = async (v: Vehicle, status: 'approved' | 'rejected') => {
+    const action = status === 'approved' ? 'duyệt' : 'từ chối';
+    if (!confirm(`Xác nhận ${action} phương tiện này?`)) return;
 
     try {
-      await authApi.post(`/vehicles/primary/${id}`);
-      alert('Đã đặt phương tiện này làm xe chính');
+      await authApi.post(`/vehicles/${v.id}/review`, { status });
+      alert(`Đã ${action} phương tiện thành công`);
+      fetchVehicles();
+      if (selectedVehicle?.id === v.id) {
+        await fetchVehicleDetail(v.id);
+      }
+    } catch (err: any) {
+      console.error('handleReviewVehicle', err);
+      alert(err?.response?.data?.message || `Không thể ${action} phương tiện`);
+    }
+  };
+
+  // --- Fetch Vehicle detail ---
+  const fetchVehicleDetail = async (id: number) => {
+    try {
+      setDetailLoading(true);
+      const res = await authApi.get(`/vehicles/${id}`, {});
+      const d = res.data.data || res.data;
+      setSelectedVehicle(d);
+      setEditPayload({
+        license_plate: d.license_plate || '',
+        vehicle_type: d.vehicle_type || 'motorbike',
+      });
+      setOpenDetail(true);
+    } catch (err) {
+      console.error('fetchVehicleDetail', err);
+      alert('Không thể tải chi tiết phương tiện');
+    } finally {
+      setDetailLoading(false);
+    }
+  };
+
+  // --- Update Vehicle (PATCH) ---
+  const handleUpdateVehicleDetail = async () => {
+    if (!selectedVehicle) return;
+    try {
+      await authApi.patch(`/vehicles/${selectedVehicle.id}`, editPayload, {});
+      alert('Cập nhật thành công');
+      await fetchVehicleDetail(selectedVehicle.id);
       fetchVehicles();
     } catch (err: any) {
-      console.error('handleSetPrimary', err);
-      alert('Không thể đặt xe chính');
+      console.error('update Vehicle', err);
+      alert(err.response?.data?.message || 'Không thể cập nhật');
+    }
+  };
+
+  // --- Delete Vehicle ---
+  const performDeleteVehicle = async (id: number) => {
+    if (!confirm('Bạn có chắc muốn xóa phương tiện này?')) return;
+    try {
+      await authApi.delete(`/vehicles/${id}`);
+      alert('Đã xóa phương tiện');
+      if (selectedVehicle?.id === id) {
+        setOpenDetail(false);
+        setSelectedVehicle(null);
+      }
+      fetchVehicles();
+    } catch (err) {
+      console.error('delete Vehicle', err);
+      alert('Không thể xóa phương tiện');
+    }
+  };
+
+  // --- Refresh all ---
+  const handleRefreshAll = () => {
+    fetchVehicles();
+    if (selectedVehicle) {
+      fetchVehicleDetail(selectedVehicle.id);
     }
   };
 
@@ -255,25 +323,36 @@ export default function Vehicles() {
                   </Select>
                 </div>
 
-                <div>
-                  <Label>Người dùng</Label>
-                  <Select
-                    value={String(formPayload.user_id ?? 'none')}
-                    onValueChange={(v) => setFormPayload({ ...formPayload, user_id: v === 'none' ? '' : Number(v) })}
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Chọn người dùng" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">-- Chọn người dùng --</SelectItem>
-                      {users.map((u) => (
-                        <SelectItem key={u.id} value={String(u.id)}>
-                          {u.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+                {!isEditMode ? (
+                  <div>
+                    <Label>Người dùng</Label>
+                    <Select
+                      value={String(formPayload.user_id ?? 'none')}
+                      onValueChange={(v) => setFormPayload({ ...formPayload, user_id: v === 'none' ? '' : Number(v) })}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Chọn người dùng" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">-- Chọn người dùng --</SelectItem>
+                        {users.map((u) => (
+                          <SelectItem key={u.id} value={String(u.id)}>
+                            {u.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ) : (
+                  <div>
+                    <Label>Người dùng</Label>
+                    <Input
+                      value={selectedVehicle?.user?.name || '-'}
+                      disabled
+                      className="bg-muted"
+                    />
+                  </div>
+                )}
               </div>
 
               <DialogFooter>
@@ -288,68 +367,92 @@ export default function Vehicles() {
         </div>
 
         {/* Filters */}
-        <div className="flex gap-3 flex-wrap items-center">
-          <div className="relative flex-1 min-w-[250px]">
-            <Input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Tìm tên, biển số..."
-              className="pl-8"
-            />
-            <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+        <div className="w-full space-y-3 rounded-xl border bg-muted/20 p-4">
+          <div className="text-sm font-medium text-muted-foreground">Bộ lọc tìm kiếm</div>
+          <div className="flex flex-wrap gap-3 items-end">
+            <div className="flex flex-col gap-1 flex-1 min-w-[250px]">
+              <Label className="text-sm text-muted-foreground">Từ khóa</Label>
+              <div className="relative">
+                <Input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Nhập biển số hoặc tên người dùng..."
+                  className="pl-8"
+                />
+                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <Label className="text-sm text-muted-foreground">Trạng thái hoạt động</Label>
+              <Select value={vehIsActiveFilter} onValueChange={(v) => setVehIsActiveFilter(v)}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="Trạng thái hoạt động" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Tất cả</SelectItem>
+                  <SelectItem value="true">Đang hoạt động</SelectItem>
+                  <SelectItem value="false">Đã ngừng</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <Label className="text-sm text-muted-foreground">Tình trạng duyệt</Label>
+              <Select value={vehStatusFilter} onValueChange={(v) => setVehStatusFilter(v)}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="Tình trạng duyệt" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Tất cả</SelectItem>
+                  <SelectItem value="pending">Chờ duyệt</SelectItem>
+                  <SelectItem value="approved">Đã duyệt</SelectItem>
+                  <SelectItem value="rejected">Đã từ chối</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <Label className="text-sm text-muted-foreground">Loại phương tiện</Label>
+              <Select value={vehTypeFilter} onValueChange={setVehTypeFilter}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="Loại phương tiện" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Tất cả</SelectItem>
+                  <SelectItem value="motorbike">Xe máy</SelectItem>
+                  <SelectItem value="car_4_seat">Xe 4 chỗ</SelectItem>
+                  <SelectItem value="car_7_seat">Xe 7 chỗ</SelectItem>
+                  <SelectItem value="light_truck">Xe tải nhẹ</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <Label className="text-sm text-muted-foreground">Người sở hữu</Label>
+              <Select value={vehUserFilter} onValueChange={(v) => setVehUserFilter(v)}>
+                <SelectTrigger className="w-[200px]">
+                  <SelectValue placeholder="Người sở hữu" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Tất cả</SelectItem>
+                  {users.map((u) => (
+                    <SelectItem key={u.id} value={String(u.id)}>
+                      {u.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <Label className="text-sm text-muted-foreground"> </Label>
+              <Button variant="outline" onClick={handleRefreshAll} className="flex items-center gap-2">
+                <RefreshCw className="h-4 w-4" />
+                Làm mới
+              </Button>
+            </div>
           </div>
-
-          <Select value={vehIsActiveFilter} onValueChange={(v) => setVehIsActiveFilter(v)}>
-            <SelectTrigger className="w-[140px]">
-              <SelectValue placeholder="Trạng thái" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Tất cả</SelectItem>
-              <SelectItem value="true">Hoạt động</SelectItem>
-              <SelectItem value="false">Ngừng</SelectItem>
-            </SelectContent>
-          </Select>
-
-          <div className="flex items-center gap-2">
-            <Label>Loại xe</Label>
-            <Select value={vehTypeFilter} onValueChange={setVehTypeFilter}>
-              <SelectTrigger className="w-[160px]">
-                <SelectValue placeholder="Tất cả loại xe" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Tất cả</SelectItem>
-                <SelectItem value="motorbike">Xe máy</SelectItem>
-                <SelectItem value="car_4_seat">Xe 4 chỗ</SelectItem>
-                <SelectItem value="car_7_seat">Xe 7 chỗ</SelectItem>
-                <SelectItem value="light_truck">Xe tải nhẹ</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <Select value={vehUserFilter} onValueChange={(v) => setVehUserFilter(v)}>
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="Người dùng" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Tất cả</SelectItem>
-              {users.map((u) => (
-                <SelectItem key={u.id} value={String(u.id)}>
-                  {u.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          <Select value={limit.toString()} onValueChange={(v) => setLimit(Number(v))}>
-            <SelectTrigger className="w-[120px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="5">5 / trang</SelectItem>
-              <SelectItem value="10">10 / trang</SelectItem>
-              <SelectItem value="20">20 / trang</SelectItem>
-            </SelectContent>
-          </Select>
         </div>
       </CardHeader>
 
@@ -374,8 +477,9 @@ export default function Vehicles() {
                     <TableHead>Biển số</TableHead>
                     <TableHead>Loại xe</TableHead>
                     <TableHead>Người dùng</TableHead>
-                    <TableHead>Trạng thái</TableHead>
-                    <TableHead>Thao tác</TableHead>
+                    <TableHead>Trạng thái duyệt</TableHead>
+                    <TableHead>Hoạt động</TableHead>
+                    <TableHead className="text-right">Hành động</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -387,11 +491,7 @@ export default function Vehicles() {
                     </TableRow>
                   ) : (
                     pagedData.map((v) => (
-                      <TableRow
-                        key={v.id}
-                        className="cursor-pointer hover:bg-muted/50 transition"
-                        onClick={() => openEditForm(v)}
-                      >
+                      <TableRow key={v.id} className="hover:bg-muted/50 transition">
                         <TableCell className="font-medium">{v.id}</TableCell>
                         <TableCell>{v.license_plate}</TableCell>
                         <TableCell>
@@ -404,51 +504,65 @@ export default function Vehicles() {
                         </TableCell>
                         <TableCell>{v.user?.name || '-'}</TableCell>
                         <TableCell>
+                          {v.status === 'pending' ? (
+                            <Badge className="bg-yellow-50 text-yellow-700 border-yellow-200">Chờ duyệt</Badge>
+                          ) : v.status === 'approved' ? (
+                            <Badge className="bg-green-50 text-green-700 border-green-200">Đã duyệt</Badge>
+                          ) : v.status === 'rejected' ? (
+                            <Badge className="bg-red-50 text-red-700 border-red-200">Từ chối</Badge>
+                          ) : (
+                            <Badge variant="outline">-</Badge>
+                          )}
+                        </TableCell>
+                        <TableCell>
                           {v.is_active ? (
                             <Badge className="bg-green-50 text-green-700 border-green-200">Hoạt động</Badge>
                           ) : (
-                            <Badge className="bg-red-50 text-red-700 border-red-200">Ngừng</Badge>
+                            <Badge className="bg-gray-50 text-gray-700 border-gray-200">Ngừng</Badge>
                           )}
                         </TableCell>
-                        <TableCell className="flex items-center gap-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleToggleActive(v, e);
-                            }}
-                          >
-                            {v.is_active ? 'Tắt' : 'Bật'}
-                          </Button>
-
-                          {v.is_primary ? (
-                            <Button size="sm" disabled>
-                              Xe chính
+                        <TableCell>
+                          <div className="flex justify-end gap-2">
+                            <Button size="sm" variant="outline" onClick={() => fetchVehicleDetail(v.id)}>
+                              Chi tiết
                             </Button>
-                          ) : (
+                            {v.status === 'pending' && (
+                              <>
+                                <Button
+                                  size="sm"
+                                  variant="default"
+                                  className="bg-green-600 hover:bg-green-700"
+                                  onClick={() => handleReviewVehicle(v, 'approved')}
+                                >
+                                  Duyệt
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="destructive"
+                                  onClick={() => handleReviewVehicle(v, 'rejected')}
+                                >
+                                  Từ chối
+                                </Button>
+                              </>
+                            )}
+                            {v.status === 'approved' && (
+                              <Button
+                                size="sm"
+                                variant={v.is_active ? 'secondary' : 'default'}
+                                onClick={(e) => handleToggleActive(v, e)}
+                              >
+                                {v.is_active ? 'Khóa' : 'Mở khóa'}
+                              </Button>
+                            )}
                             <Button
-                              variant="outline"
                               size="sm"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleSetPrimary(v.id);
-                              }}
+                              variant="ghost"
+                              className="text-red-600"
+                              onClick={() => performDeleteVehicle(v.id)}
                             >
-                              Đặt chính
+                              Xóa
                             </Button>
-                          )}
-
-                          <Button
-                            size="sm"
-                            variant="destructive"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDeleteVehicle(v);
-                            }}
-                          >
-                            Xóa
-                          </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))
@@ -486,6 +600,158 @@ export default function Vehicles() {
           </>
         )}
       </CardContent>
+
+      {/* Detail dialog */}
+      <Dialog
+        open={openDetail}
+        onOpenChange={(v) => {
+          setOpenDetail(v);
+          if (!v) {
+            setSelectedVehicle(null);
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-[800px]">
+          <DialogHeader>
+            <DialogTitle>Chi tiết phương tiện</DialogTitle>
+          </DialogHeader>
+
+          {detailLoading ? (
+            <div className="text-center py-10 text-muted-foreground">Đang tải...</div>
+          ) : selectedVehicle ? (
+            <div className="space-y-6">
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <h3 className="text-sm font-medium text-muted-foreground">Thông tin phương tiện</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="license_plate">Biển số *</Label>
+                      <Input
+                        id="license_plate"
+                        value={editPayload.license_plate}
+                        onChange={(e) => setEditPayload({ ...editPayload, license_plate: e.target.value })}
+                        placeholder="Nhập biển số xe"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="vehicle_type">Loại phương tiện *</Label>
+                      <Select
+                        value={editPayload.vehicle_type}
+                        onValueChange={(v) => setEditPayload({ ...editPayload, vehicle_type: v })}
+                      >
+                        <SelectTrigger id="vehicle_type">
+                          <SelectValue placeholder="Chọn loại phương tiện" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="motorbike">Xe máy</SelectItem>
+                          <SelectItem value="car_4_seat">Xe 4 chỗ</SelectItem>
+                          <SelectItem value="car_7_seat">Xe 7 chỗ</SelectItem>
+                          <SelectItem value="light_truck">Xe tải nhẹ</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="user">Chủ sở hữu</Label>
+                      <Input
+                        id="user"
+                        value={selectedVehicle.user?.name || '-'}
+                        disabled
+                        readOnly
+                        className="bg-muted"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="is_primary">Xe chính</Label>
+                      <Input
+                        id="is_primary"
+                        value={selectedVehicle.is_primary ? 'Có' : 'Không'}
+                        disabled
+                        readOnly
+                        className="bg-muted"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="border-t pt-4 space-y-2">
+                  <h3 className="text-sm font-medium text-muted-foreground">Trạng thái</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Tình trạng duyệt</Label>
+                      <Input
+                        value={
+                          selectedVehicle.status === 'pending'
+                            ? 'Chờ duyệt'
+                            : selectedVehicle.status === 'approved'
+                              ? 'Đã duyệt'
+                              : selectedVehicle.status === 'rejected'
+                                ? 'Đã từ chối'
+                                : '-'
+                        }
+                        disabled
+                        readOnly
+                        className="bg-muted"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Trạng thái hoạt động</Label>
+                      <Input
+                        value={selectedVehicle.is_active ? 'Đang hoạt động' : 'Đã ngừng'}
+                        disabled
+                        readOnly
+                        className="bg-muted"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="border-t pt-4 space-y-2">
+                  <h3 className="text-sm font-medium text-muted-foreground">Thông tin hệ thống</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {selectedVehicle.created_at && (
+                      <div className="space-y-2">
+                        <Label>Ngày tạo</Label>
+                        <Input
+                          value={new Date(selectedVehicle.created_at).toLocaleString('vi-VN', {
+                            dateStyle: 'long',
+                            timeStyle: 'short',
+                          })}
+                          disabled
+                          readOnly
+                          className="bg-muted"
+                        />
+                      </div>
+                    )}
+                    {selectedVehicle.updated_at && (
+                      <div className="space-y-2">
+                        <Label>Cập nhật lần cuối</Label>
+                        <Input
+                          value={new Date(selectedVehicle.updated_at).toLocaleString('vi-VN', {
+                            dateStyle: 'long',
+                            timeStyle: 'short',
+                          })}
+                          disabled
+                          readOnly
+                          className="bg-muted"
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-2 pt-4 border-t">
+                  <Button variant="outline" onClick={() => fetchVehicleDetail(selectedVehicle.id)}>
+                    Làm mới
+                  </Button>
+                  <Button onClick={handleUpdateVehicleDetail}>Lưu thay đổi</Button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="text-center py-8 text-muted-foreground">Không có dữ liệu</div>
+          )}
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }
