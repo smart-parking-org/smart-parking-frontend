@@ -39,6 +39,39 @@ export interface ReportSummary {
   total_conflicts: number;
 }
 
+// New types for the new API endpoint
+export interface RevenueReportData {
+  revenue: {
+    parking_revenue: number;
+    monthly_pass_revenue: number;
+    total_revenue: number;
+  };
+  usage: {
+    total_reservations: number;
+    confirmed: number;
+    checked_in: number;
+    checked_out: number;
+    cancelled: number;
+    expired: number;
+  };
+  conflicts: {
+    total_requests: number;
+    assigned: number;
+    failed: number;
+    pending: number;
+  };
+  parking_lot_id: string;
+  parking_lot_name: string;
+  date_from: string | null;
+  date_to: string | null;
+  generated_at: string;
+}
+
+export interface RevenueReportResponse {
+  success: boolean;
+  data: RevenueReportData;
+}
+
 /**
  * Lấy dữ liệu doanh thu theo tháng từ các reservation đã checkout
  */
@@ -492,5 +525,37 @@ export async function getReportSummary(params?: {
       average_utilization: 0,
       total_conflicts: 0,
     };
+  }
+}
+
+/**
+ * Lấy báo cáo doanh thu từ endpoint mới
+ */
+export async function getRevenueReportNew(params?: {
+  date_from?: string;
+  date_to?: string;
+  parking_lot_id?: number;
+}): Promise<RevenueReportData> {
+  try {
+    const queryParams: any = {};
+    
+    if (params?.parking_lot_id) {
+      queryParams.parking_lot_id = params.parking_lot_id;
+    }
+    if (params?.date_from) {
+      queryParams.date_from = params.date_from;
+    }
+    if (params?.date_to) {
+      queryParams.date_to = params.date_to;
+    }
+
+    const response = await reservationApi.get<RevenueReportResponse>('/reports/revenue', {
+      params: queryParams,
+    });
+
+    return response.data.data;
+  } catch (error) {
+    console.error('Error fetching revenue report:', error);
+    throw error;
   }
 }
