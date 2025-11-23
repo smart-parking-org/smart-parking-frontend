@@ -252,14 +252,13 @@ const PeakHour = ({ selectedLotId }: PeakHourProps) => {
 
   if (loading) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Giờ cao điểm</CardTitle>
-          <p className="text-sm text-muted-foreground">Cấu hình khung giờ có mức giá cao hơn</p>
+      <Card className="border-l-4 border-l-orange-500">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Giờ cao điểm</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-6 p-6">
+        <CardContent>
           <div className="flex items-center justify-center h-32">
-            <div className="text-muted-foreground">Đang tải...</div>
+            <div className="text-sm text-muted-foreground">Đang tải...</div>
           </div>
         </CardContent>
       </Card>
@@ -267,32 +266,32 @@ const PeakHour = ({ selectedLotId }: PeakHourProps) => {
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">Giờ cao điểm</CardTitle>
-        <p className="text-sm text-muted-foreground">Cấu hình khung giờ có mức giá cao hơn</p>
+    <Card className="border-l-4 border-l-orange-500">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base">Giờ cao điểm</CardTitle>
+        <p className="text-xs text-muted-foreground mt-1">Cấu hình khung giờ có mức giá cao hơn</p>
       </CardHeader>
-      <CardContent className="space-y-6">
+      <CardContent className="space-y-4">
         {peakForms.length === 0 ? (
-          <div className="text-center py-8 border-2 border-dashed border-muted-foreground/25 rounded-lg">
-            <p className="text-muted-foreground mb-4">Chưa có giờ cao điểm nào được cấu hình</p>
-            <Button variant="outline" onClick={addPeakHour}>
-              Thêm giờ cao điểm đầu tiên
+          <div className="text-center py-6 border-2 border-dashed border-muted-foreground/25 rounded-lg">
+            <p className="text-sm text-muted-foreground mb-3">Chưa có giờ cao điểm nào</p>
+            <Button variant="outline" size="sm" onClick={addPeakHour}>
+              Thêm giờ cao điểm
             </Button>
           </div>
         ) : (
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-3 grid-cols-1 sm:grid-cols-2">
             {peakForms.map((peak, i) => (
-              <div key={i} className="border rounded-lg p-4 space-y-3">
+              <div key={i} className="border rounded-lg p-3 space-y-2">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <Badge variant="secondary" className="text-xs">
+                    <Badge variant="secondary" className="text-[10px]">
                       #{i + 1}
                     </Badge>
-                    <span className="text-sm font-medium">{getDayName(peak.day_of_week)}</span>
+                    <span className="text-xs font-medium">{getDayName(peak.day_of_week)}</span>
                   </div>
                   <div className="flex gap-1">
-                    <Button size="sm" onClick={() => updatePeakHour(i)} disabled={saving} className="h-7 px-2 text-xs">
+                    <Button size="sm" onClick={() => updatePeakHour(i)} disabled={saving} className="h-6 px-2 text-[10px]">
                       {saving ? '...' : 'Lưu'}
                     </Button>
                     <Button
@@ -305,7 +304,7 @@ const PeakHour = ({ selectedLotId }: PeakHourProps) => {
                           removePeakHour(i);
                         }
                       }}
-                      className="h-7 w-7 p-0"
+                      className="h-6 w-6 p-0 text-xs"
                     >
                       ×
                     </Button>
@@ -314,51 +313,49 @@ const PeakHour = ({ selectedLotId }: PeakHourProps) => {
 
                 <div className="grid gap-2 grid-cols-3">
                   <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">Thứ</Label>
+                    <Label className="text-[10px] text-muted-foreground">Thứ</Label>
                     <Select
                       value={peak.day_of_week.toString()}
                       onValueChange={(val) => updatePeakHourField(i, 'day_of_week', +val)}
                     >
-                      <SelectTrigger className="h-8 text-xs">
+                      <SelectTrigger className="h-7 text-xs">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="0">Chủ nhật</SelectItem>
-                        <SelectItem value="1">Thứ 2</SelectItem>
-                        <SelectItem value="2">Thứ 3</SelectItem>
-                        <SelectItem value="3">Thứ 4</SelectItem>
-                        <SelectItem value="4">Thứ 5</SelectItem>
-                        <SelectItem value="5">Thứ 6</SelectItem>
-                        <SelectItem value="6">Thứ 7</SelectItem>
+                        <SelectItem value="0">CN</SelectItem>
+                        <SelectItem value="1">T2</SelectItem>
+                        <SelectItem value="2">T3</SelectItem>
+                        <SelectItem value="3">T4</SelectItem>
+                        <SelectItem value="4">T5</SelectItem>
+                        <SelectItem value="5">T6</SelectItem>
+                        <SelectItem value="6">T7</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">Bắt đầu</Label>
+                    <Label className="text-[10px] text-muted-foreground">Bắt đầu</Label>
                     <Input
                       type="time"
                       value={formatTimeForInput(peak.start_time)}
                       onChange={(e) => updatePeakHourField(i, 'start_time', e.target.value)}
-                      className="h-8 text-xs"
+                      className="h-7 text-xs"
                       step="60"
                     />
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">Kết thúc</Label>
+                    <Label className="text-[10px] text-muted-foreground">Kết thúc</Label>
                     <Input
                       type="time"
                       value={formatTimeForInput(peak.end_time)}
                       onChange={(e) => updatePeakHourField(i, 'end_time', e.target.value)}
-                      className="h-8 text-xs"
+                      className="h-7 text-xs"
                       step="60"
                     />
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between p-2 bg-muted/50 rounded">
-                  <div>
-                    <Label className="text-xs font-medium">Kích hoạt</Label>
-                  </div>
+                <div className="flex items-center justify-between p-2 bg-muted/30 rounded">
+                  <Label className="text-xs">Kích hoạt</Label>
                   <Switch
                     checked={peak.is_active}
                     onCheckedChange={(checked) => updatePeakHourField(i, 'is_active', checked)}
@@ -370,15 +367,13 @@ const PeakHour = ({ selectedLotId }: PeakHourProps) => {
           </div>
         )}
 
-        <Separator />
-
-        <div className="flex gap-3">
-          <Button variant="outline" onClick={addPeakHour} className="flex-1">
-            Thêm khung giờ cao điểm
+        <div className="flex gap-2 pt-2 border-t">
+          <Button variant="outline" size="sm" onClick={addPeakHour} className="flex-1">
+            Thêm khung giờ
           </Button>
           {peakForms.length > 0 && (
-            <Button onClick={updateAllPeakHours} disabled={saving} className="flex-1">
-              {saving ? 'Đang lưu tất cả...' : 'Lưu tất cả'}
+            <Button size="sm" onClick={updateAllPeakHours} disabled={saving} className="flex-1">
+              {saving ? 'Đang lưu...' : 'Lưu tất cả'}
             </Button>
           )}
         </div>

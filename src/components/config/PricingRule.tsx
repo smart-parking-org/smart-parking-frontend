@@ -161,14 +161,13 @@ const PricingRule = ({ selectedLotId }: PricingRuleProps) => {
 
   if (loading) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Bảng giá theo loại xe</CardTitle>
-          <p className="text-sm text-muted-foreground">Cấu hình giá cho từng loại phương tiện</p>
+      <Card className="border-l-4 border-l-green-500">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Bảng giá theo loại xe</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-6 p-6">
+        <CardContent>
           <div className="flex items-center justify-center h-32">
-            <div className="text-muted-foreground">Đang tải...</div>
+            <div className="text-sm text-muted-foreground">Đang tải...</div>
           </div>
         </CardContent>
       </Card>
@@ -176,31 +175,31 @@ const PricingRule = ({ selectedLotId }: PricingRuleProps) => {
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">Bảng giá theo loại xe</CardTitle>
-        <p className="text-sm text-muted-foreground">Cấu hình giá cho từng loại phương tiện</p>
+    <Card className="border-l-4 border-l-green-500">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base">Bảng giá theo loại xe</CardTitle>
+        <p className="text-xs text-muted-foreground mt-1">Cấu hình giá cho từng loại phương tiện</p>
       </CardHeader>
-      <CardContent className="space-y-6">
+      <CardContent className="space-y-4">
         {/* Pricing Table */}
-        <div className="rounded-lg border">
+        <div className="rounded-lg border overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-[120px]">Loại xe</TableHead>
-                <TableHead className="w-[120px]">Giá/giờ (VND)</TableHead>
-                <TableHead className="w-[120px]">Giới hạn ngày</TableHead>
-                <TableHead className="w-[120px]">Vé tháng</TableHead>
-                <TableHead className="w-[100px]">Hệ số cao điểm</TableHead>
-                <TableHead className="w-[100px]">Cao điểm</TableHead>
-                <TableHead className="w-[80px]">Thao tác</TableHead>
+                <TableHead className="w-[100px] text-xs">Loại xe</TableHead>
+                <TableHead className="w-[110px] text-xs">Giá/giờ</TableHead>
+                <TableHead className="w-[110px] text-xs hidden md:table-cell">Giới hạn ngày</TableHead>
+                <TableHead className="w-[110px] text-xs hidden lg:table-cell">Vé tháng</TableHead>
+                <TableHead className="w-[100px] text-xs hidden lg:table-cell">Hệ số cao điểm</TableHead>
+                <TableHead className="w-[90px] text-xs">Cao điểm</TableHead>
+                <TableHead className="w-[70px] text-xs">Thao tác</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {Object.entries(pricingForms).map(([vehicleType, pricing]) => (
                 <TableRow key={vehicleType}>
-                  <TableCell className="font-medium">
-                    <span className="text-sm">{getVehicleTypeName(vehicleType as VehicleType)}</span>
+                  <TableCell className="font-medium text-xs">
+                    {getVehicleTypeName(vehicleType as VehicleType)}
                   </TableCell>
                   <TableCell>
                     <Input
@@ -209,10 +208,10 @@ const PricingRule = ({ selectedLotId }: PricingRuleProps) => {
                       step={1000}
                       value={pricing.hourly || ''}
                       onChange={(e) => updatePricingField(vehicleType as VehicleType, 'hourly', +e.target.value)}
-                      className="h-8 w-full"
+                      className="h-7 w-full text-xs"
                     />
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="hidden md:table-cell">
                     <Input
                       type="number"
                       min={0}
@@ -225,11 +224,11 @@ const PricingRule = ({ selectedLotId }: PricingRuleProps) => {
                           e.target.value ? +e.target.value : null,
                         )
                       }
-                      className="h-8 w-full"
+                      className="h-7 w-full text-xs"
                       placeholder="Không giới hạn"
                     />
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="hidden lg:table-cell">
                     <Input
                       type="number"
                       min={0}
@@ -242,11 +241,11 @@ const PricingRule = ({ selectedLotId }: PricingRuleProps) => {
                           e.target.value ? +e.target.value : null,
                         )
                       }
-                      className="h-8 w-full"
+                      className="h-7 w-full text-xs"
                       placeholder="Không có"
                     />
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="hidden lg:table-cell">
                     <Input
                       type="number"
                       min={1}
@@ -259,7 +258,7 @@ const PricingRule = ({ selectedLotId }: PricingRuleProps) => {
                           e.target.value ? +e.target.value : null,
                         )
                       }
-                      className="h-8 w-full"
+                      className="h-7 w-full text-xs"
                       placeholder="1.5"
                     />
                   </TableCell>
@@ -269,6 +268,7 @@ const PricingRule = ({ selectedLotId }: PricingRuleProps) => {
                       onCheckedChange={(checked) =>
                         updatePricingField(vehicleType as VehicleType, 'peak_enabled', checked)
                       }
+                      className="scale-75"
                     />
                   </TableCell>
                   <TableCell>
@@ -276,7 +276,7 @@ const PricingRule = ({ selectedLotId }: PricingRuleProps) => {
                       size="sm"
                       onClick={() => updatePricingRule(vehicleType as VehicleType)}
                       disabled={saving}
-                      className="h-8 px-3"
+                      className="h-7 px-2 text-xs"
                     >
                       {saving ? '...' : 'Lưu'}
                     </Button>
@@ -289,8 +289,8 @@ const PricingRule = ({ selectedLotId }: PricingRuleProps) => {
 
         {/* Action Button */}
         <div className="flex justify-end">
-          <Button onClick={updateAllPricingRules} disabled={saving} className="min-w-[200px]">
-            {saving ? 'Đang lưu tất cả...' : 'Lưu tất cả bảng giá'}
+          <Button onClick={updateAllPricingRules} disabled={saving} size="sm">
+            {saving ? 'Đang lưu...' : 'Lưu tất cả'}
           </Button>
         </div>
       </CardContent>
