@@ -41,6 +41,7 @@ export default function QRAdminScanner() {
   const [loadingLots, setLoadingLots] = useState(false);
   const [loadingGates, setLoadingGates] = useState(false);
   const [checkInData, setCheckInData] = useState<any>(null);
+  const [checkOutData, setCheckOutData] = useState<any>(null);
 
   // Fetch parking lots
   useEffect(() => {
@@ -129,10 +130,18 @@ export default function QRAdminScanner() {
           });
 
           if (response.data.success) {
-            setMessage('Check-out thành công!');
-            setTimeout(() => {
-              resetScanner();
-            }, 2000);
+            const data = response.data.data;
+            
+            // ✅ Nếu cần xác nhận offline payment
+            if (data.requires_confirmation && data.payment_method === 'offline') {
+              setMessage(`Đã quét QR thành công. Số tiền: ${data.amount_formatted}. Vui lòng xác nhận thanh toán.`);
+              setCheckOutData(data); // Lưu để hiển thị và xác nhận
+            } else {
+              setMessage('Check-out thành công!');
+              setTimeout(() => {
+                resetScanner();
+              }, 2000);
+            }
           } else {
             throw new Error(response.data.message || 'Không thể check-out');
           }
@@ -163,6 +172,33 @@ export default function QRAdminScanner() {
     setSelectedGateId(null);
     setGates([]);
     setCheckInData(null);
+    setCheckOutData(null);
+  };
+
+  const handleConfirmOfflinePayment = async () => {
+    if (!checkOutData) return;
+
+    setIsProcessing(true);
+    try {
+      const response = await reservationApi.post('/reservations/demo/check-out/confirm', {
+        reservation_code: checkOutData.reservation.reservation_code,
+      });
+
+      if (response.data.success) {
+        setMessage('Xác nhận thanh toán thành công! Check-out đã hoàn tất.');
+        setTimeout(() => {
+          resetScanner();
+        }, 2000);
+      } else {
+        throw new Error(response.data.message || 'Không thể xác nhận thanh toán');
+      }
+    } catch (err: any) {
+      console.error('Confirm payment error:', err);
+      const errorMessage = err.response?.data?.message || err.message || 'Không thể xác nhận thanh toán';
+      setMessage(`Lỗi: ${errorMessage}`);
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   const getVehicleTypeLabel = (type: string) => {
@@ -588,6 +624,77 @@ export default function QRAdminScanner() {
             </Card>
           )}
 
+          {/* Hiển thị thông tin thanh toán offline và nút xác nhận */}
+          {checkOutData && checkOutData.requires_confirmation && (
+            <Card className="mt-4 border-2 border-orange-200 dark:border-orange-800">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <CreditCard className="h-5 w-5" />
+                  Xác nhận thanh toán offline
+                </CardTitle>
+                <CardDescription>
+                  Vui lòng xác nhận đã nhận được tiền từ khách hàng
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-muted-foreground">Mã đặt chỗ:</span>
+                    <span className="font-medium font-mono">{checkOutData.reservation?.reservation_code}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-muted-foreground">Biển số xe:</span>
+                    <span className="font-medium">
+                      {checkOutData.reservation?.vehicle_snapshot?.license_plate || 'N/A'}
+                    </span>
+                  </div>
+                  <Separator />
+                  <div className="flex justify-between items-center">
+                    <span className="text-muted-foreground">Số tiền cần thanh toán:</span>
+                    <span className="text-2xl font-bold text-primary">{checkOutData.amount_formatted}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-muted-foreground">Trạng thái thanh toán:</span>
+                    <Badge variant={checkOutData.payment_status === 'PAID' ? 'default' : 'secondary'}>
+                      {checkOutData.payment_status === 'PAID' ? 'Đã thanh toán' : 'Chờ thanh toán'}
+                    </Badge>
+                  </div>
+                </div>
+                <Separator />
+                <div className="flex gap-2">
+                  <Button
+                    onClick={handleConfirmOfflinePayment}
+                    className="flex-1"
+                    disabled={isProcessing}
+                    size="lg"
+                  >
+                    {isProcessing ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Đang xử lý...
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 className="mr-2 h-4 w-4" />
+                        Xác nhận đã nhận tiền
+                      </>
+                    )}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setCheckOutData(null);
+                      setMessage('');
+                    }}
+                    size="lg"
+                    disabled={isProcessing}
+                  >
+                    Hủy
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Nút chọn chế độ quét */}
           {!typeScan && !isScanning && (
